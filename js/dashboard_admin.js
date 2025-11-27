@@ -423,7 +423,7 @@ async function loadAttendanceSummary() {
     const end = document.getElementById("attendanceEnd").value;
     const mode = document.getElementById("attendanceMode").value;
 
-    let url = `${BASE_URL}/attendance/history?mode=${mode}`;
+    let url = `${BASE_URL}/attendance/history`;
 
     if (userId) url += `&user_id=${userId}`;
     if (start) url += `&start_date=${start}`;
