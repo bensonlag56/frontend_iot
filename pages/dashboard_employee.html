@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard Empleado - Sistema de Asistencias</title>
+  <link rel="stylesheet" href="../css/dashboard.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">Empleado</div>
+
+      <!-- Sidebar: ahora con botones -->
+      <nav>
+        <button id="nav-my-attendances" class="sidebar-btn">Mis asistencias</button>
+        <button id="nav-my-schedule" class="sidebar-btn">Mi horario</button>
+      </nav>
+
+      <div style="margin-top:auto;">
+        <button id="logoutBtn" class="btn small secondary">Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section id="section-my-attendances" class="pane">
+        <h2>Mis asistencias</h2>
+        <table id="myAttendancesTable" class="table">
+          <thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section id="section-my-schedule" class="pane" style="display:none;">
+        <h2>Mi horario</h2>
+        <div id="myScheduleCard" class="card-small"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="../js/auth.js"></script> <!-- opcional, puede estar vacío en modo mock -->
+  <script src="../js/dashboard_employee.js"></script>
+</body>
+</html>

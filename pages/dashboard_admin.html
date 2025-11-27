@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard Admin - Sistema de Asistencias</title>
+  <link rel="stylesheet" href="../css/dashboard.css" />
+</head>
+<body>
+
+  <script src="../js/authGuard.js"></script>
+
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">Administrador</div>
+
+      <nav>
+        <button id="nav-register-employee" class="sidebar-btn">Registrar empleado</button>
+        <button id="nav-list-employees" class="sidebar-btn">Lista de empleados</button>
+        <button id="nav-schedules" class="sidebar-btn">Horarios</button>
+        <button id="nav-attendances" class="sidebar-btn">Asistencias</button>
+      </nav>
+
+      <div style="margin-top:auto;">
+        <button id="logoutBtn" class="btn small secondary">Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <!-- CONTENT -->
+    <main class="content">
+
+      <!-- ============= -->
+      <!-- REGISTRAR EMPLEADO -->
+      <!-- ============= -->
+      <section id="section-register-employee" class="pane">
+        <h2>Registrar empleado</h2>
+
+        <div class="form">
+          <label>Nombre</label>
+          <input type="text" id="empName" placeholder="Nombre del empleado">
+
+          <label>Apellido</label>
+          <input type="text" id="empLastName" placeholder="Apellido del empleado">
+
+          <label>Nombre de usuario</label>
+          <input type="text" id="empUsername" placeholder="Username">
+
+          <label>Contraseña</label>
+          <input type="password" id="empPassword" placeholder="Contraseña">
+
+          <label>Género</label>
+          <select id="empGenero">
+            <option value="">Seleccione</option>
+            <option value="Masculino">Masculino</option>
+            <option value="Femenino">Femenino</option>
+          </select>
+
+          <label>Fecha de nacimiento</label>
+          <input type="date" id="empDOB">
+
+          <label>Fecha de contrato</label>
+          <input type="date" id="empHireDate">
+
+          <label>Área de trabajo</label>
+          <input type="text" id="emprea" placeholder="Ej: Cocina, Limpieza">
+
+          <button id="btn-save-employee" class="btn primary" style="margin-top:20px;">
+            Registrar empleado
+          </button>
+        </div>
+      </section>
+
+      <!-- ============= -->
+      <!-- LISTA DE EMPLEADOS -->
+      <!-- ============= -->
+      <section id="section-list-employees" class="pane" style="display:none;">
+        <h2>Empleados registrados</h2>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th>ID</th><th>Username</th><th>Nombre</th><th>Apellido</th>
+              <th>Rol</th><th>Área</th><th>Huella ID</th><th>RFID</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="employeesTableBody"></tbody>
+        </table>
+      </section>
+
+      <!-- ============= -->
+      <!-- HORARIOS -->
+      <!-- ============= -->
+      <section id="section-schedules" class="pane" style="display:none;">
+        <h2>Horarios</h2>
+
+        <button id="btnOpenCreateSchedule" class="btn primary" style="margin-bottom:15px;">
+          Crear horario
+        </button>
+
+        <div id="schedulesContainer" class="cards-container"></div>
+      </section>
+
+      <!-- ============= -->
+      <!-- ASISTENCIAS -->
+      <!-- ============= -->
+      <section id="section-admin-attendances" class="pane" style="display:none;">
+        <h2>Asistencias de empleados</h2>
+        <table class="table">
+          <thead>
+            <tr><th>Empleado</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========================= -->
+  <!-- MODAL CREAR HORARIO -->
+  <!-- ========================= -->
+  <div id="createScheduleModal" class="modal" style="display:none;">
+    <div class="modal-content">
+
+      <h3>Crear Horario</h3>
+
+      <label>Nombre</label>
+      <input id="schName" type="text">
+
+      <label>Días</label>
+      <div class="days-grid">
+        <label><input type="checkbox" class="sch-day" value="Lun"> Lun</label>
+        <label><input type="checkbox" class="sch-day" value="Mar"> Mar</label>
+        <label><input type="checkbox" class="sch-day" value="Mie"> Mie</label>
+        <label><input type="checkbox" class="sch-day" value="Jue"> Jue</label>
+        <label><input type="checkbox" class="sch-day" value="Vie"> Vie</label>
+        <label><input type="checkbox" class="sch-day" value="Sab"> Sab</label>
+        <label><input type="checkbox" class="sch-day" value="Dom"> Dom</label>
+      </div>
+
+      <label>Tipo</label>
+      <select id="schTipo">
+        <option value="fijo">Fijo</option>
+        <option value="rotativo">Rotativo</option>
+      </select>
+
+      <label>Hora Entrada</label>
+      <input type="time" id="schEntrada">
+
+      <label>Tolerancia Entrada (min)</label>
+      <input type="number" id="schTolEnt" value="0">
+
+      <label>Hora Salida</label>
+      <input type="time" id="schSalida">
+
+      <label>Tolerancia Salida (min)</label>
+      <input type="number" id="schTolSal" value="0">
+
+      <div class="modal-actions">
+        <button id="btnSaveSchedule" class="btn primary">Guardar</button>
+        <button class="btn secondary" onclick="closeModal('createScheduleModal')">Cancelar</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============= -->
+  <!-- MODAL EDITAR HORARIO -->
+  <!-- ============= -->
+  <div id="editScheduleModal" class="modal" style="display:none;">
+    <div class="modal-content">
+
+      <h3>Modificar Horario</h3>
+
+      <input type="hidden" id="editScheduleId">
+
+      <label>Nombre</label>
+      <input id="editScheduleName" type="text">
+
+      <label>Días</label>
+      <div class="days-grid">
+        <label><input type="checkbox" class="edit-sch-day" value="Lun"> Lun</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Mar"> Mar</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Mie"> Mie</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Jue"> Jue</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Vie"> Vie</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Sab"> Sab</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Dom"> Dom</label>
+      </div>
+
+      <label>Tipo</label>
+      <select id="editScheduleTipo">
+        <option value="fijo">Fijo</option>
+        <option value="rotativo">Rotativo</option>
+      </select>
+
+      <label>Hora Entrada</label>
+      <input type="time" id="editScheduleEntrada">
+
+      <label>Tolerancia Entrada</label>
+      <input type="number" id="editScheduleTolEnt">
+
+      <label>Hora Salida</label>
+      <input type="time" id="editScheduleSalida">
+
+      <label>Tolerancia Salida</label>
+      <input type="number" id="editScheduleTolSal">
+
+      <div class="modal-actions">
+        <button id="btnSaveEditedSchedule" class="btn primary">Guardar cambios</button>
+        <button class="btn secondary" onclick="closeModal('editScheduleModal')">Cancelar</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================= -->
+<!-- MODAL ASIGNAR HORARIO -->
+<!-- ========================= -->
+   <div id="assignScheduleModal" class="modal" style="display:none;">
+    <div class="modal-content">
+    
+     <h3>Asignar horario a empleado</h3>
+
+     <input type="hidden" id="assignScheduleId">
+
+     <label>Seleccione empleado</label>
+     <select id="assignUserSelect"></select>
+
+     <label>Fecha de inicio</label>
+     <input type="date" id="assignStartDate">
+
+     <label>Fecha fin (opcional)</label>
+     <input type="date" id="assignEndDate">
+
+    <div class="modal-actions">
+      <button id="btnAssignSchedule" class="btn primary">Asignar</button>
+      <button class="btn secondary" onclick="closeModal('assignScheduleModal')">Cancelar</button>
+    </div>
+
+    </div>
+   </div>
+
+ <!-- ========================= -->
+<!-- SECCIÓN ASISTENCIAS -->
+<!-- ========================= -->
+<section id="section-attendance" class="pane" style="display:none;">
+    <h2>Historial de Asistencias</h2>
+
+    <div class="filters">
+        <label>Empleado:</label>
+        <select id="attendanceUserSelect">
+            <option value="">Seleccione un empleado</option>
+        </select>
+
+        <button id="btnLoadUserAttendance" class="btn primary">
+            Ver asistencias
+        </button>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Fecha / Hora</th>
+                <th>Estado</th>
+                <th>Minutos Diff</th>
+                <th>Sensor</th>
+                <th>RFID</th>
+                <th>Razón</th>
+            </tr>
+        </thead>
+        <tbody id="attendanceTableBody"></tbody>
+    </table>
+</section>
+
+
+
+  <script src="../js/dashboard_admin.js"></script>
+
+</body>
+</html>
