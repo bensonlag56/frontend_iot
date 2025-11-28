@@ -1,59 +1,112 @@
 /*************************************
- * CONFIG
+ * CONFIGURACIÓN GLOBAL
  *************************************/
 const BASE_URL = "https://asistencia-iot-api.onrender.com";
+let ESP32_BASE_URL = 'http://192.168.1.107'; // IP por defecto
 
 /*************************************
  * UTILIDADES
  *************************************/
 function openModal(id) {
-    document.getElementById(id).style.display = "flex";
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = "flex";
 }
+
 function closeModal(id) {
-    document.getElementById(id).style.display = "none";
+    const modal = document.getElementById(id);
+    if (modal) modal.style.display = "none";
 }
 
-/*************************************
- * NAV SECTIONS
- *************************************/
 function showSection(id) {
-    document.querySelectorAll(".pane").forEach(p => p.style.display = "none");
-    document.getElementById(id).style.display = "block";
+    // Ocultar todas las secciones
+    document.querySelectorAll(".pane").forEach(p => {
+        p.style.display = "none";
+    });
+    
+    // Mostrar la sección solicitada
+    const section = document.getElementById(id);
+    if (section) {
+        section.style.display = "block";
+    }
+    
+    // Ejecutar acciones específicas de cada sección
+    if (id === "section-list-employees") {
+        loadEmployees();
+    } else if (id === "section-schedules") {
+        loadSchedules();
+    } else if (id === "section-esp32-control") {
+        updateESP32Status();
+    } else if (id === "section-admin-attendances") {
+        loadUsersForAttendance();
+        loadAttendanceSummary();
+    }
 }
 
-document.getElementById("nav-register-employee").onclick = () => showSection("section-register-employee");
-document.getElementById("nav-list-employees").onclick = () => {
-    showSection("section-list-employees");
-    loadEmployees();
-};
-document.getElementById("nav-schedules").onclick = () => {
-    showSection("section-schedules");
-    loadSchedules();
-};
-document.getElementById("nav-attendances").onclick = () => showSection("section-admin-attendances");
-
 /*************************************
- * LOGOUT
+ * INICIALIZACIÓN DE NAVEGACIÓN
  *************************************/
-document.getElementById("logoutBtn").onclick = () => {
-    localStorage.clear();
-    window.location.href = "../pages/login.html";
-};
+function initializeNavigation() {
+    // Registrar empleado
+    const navRegister = document.getElementById("nav-register-employee");
+    if (navRegister) {
+        navRegister.addEventListener("click", () => showSection("section-register-employee"));
+    }
+    
+    // Lista de empleados
+    const navList = document.getElementById("nav-list-employees");
+    if (navList) {
+        navList.addEventListener("click", () => {
+            showSection("section-list-employees");
+            loadEmployees();
+        });
+    }
+    
+    // Horarios
+    const navSchedules = document.getElementById("nav-schedules");
+    if (navSchedules) {
+        navSchedules.addEventListener("click", () => {
+            showSection("section-schedules");
+            loadSchedules();
+        });
+    }
+    
+    // Asistencias
+    const navAttendances = document.getElementById("nav-attendances");
+    if (navAttendances) {
+        navAttendances.addEventListener("click", () => showSection("section-admin-attendances"));
+    }
+    
+    // Control ESP32 (ya configurado en HTML)
+    
+    // Logout
+    const logoutBtn = document.getElementById("logoutBtn");
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", () => {
+            localStorage.clear();
+            window.location.href = "../pages/login.html";
+        });
+    }
+}
 
 /*************************************
  * REGISTRAR EMPLEADO
  *************************************/
-document.getElementById("btn-save-employee").addEventListener("click", registerEmployee);
+function initializeEmployeeRegistration() {
+    const btnSaveEmployee = document.getElementById("btn-save-employee");
+    if (btnSaveEmployee) {
+        btnSaveEmployee.addEventListener("click", registerEmployee);
+    }
+}
 
 async function registerEmployee() {
-    const nombre = empName.value.trim();
-    const apellido = empLastName.value.trim();
-    const username = empUsername.value.trim();
-    const password = empPassword.value.trim();
-    const genero = empGenero.value.trim();
-    const fecha_nacimiento = empDOB.value;
-    const fecha_contrato = empHireDate.value;
-    const area_trabajo = emprea.value.trim();
+    const nombre = document.getElementById("empName").value.trim();
+    const apellido = document.getElementById("empLastName").value.trim();
+    const username = document.getElementById("empUsername").value.trim();
+    const password = document.getElementById("empPassword").value.trim();
+    const genero = document.getElementById("empGenero").value.trim();
+    const fecha_nacimiento = document.getElementById("empDOB").value;
+    const fecha_contrato = document.getElementById("empHireDate").value;
+    const area_trabajo = document.getElementById("emprea").value.trim();
 
     if (!nombre || !apellido || !username || !password) {
         alert("Complete todos los campos obligatorios");
@@ -90,6 +143,16 @@ async function registerEmployee() {
         }
 
         alert("Empleado registrado correctamente");
+        // Limpiar formulario
+        document.getElementById("empName").value = "";
+        document.getElementById("empLastName").value = "";
+        document.getElementById("empUsername").value = "";
+        document.getElementById("empPassword").value = "";
+        document.getElementById("empGenero").value = "";
+        document.getElementById("empDOB").value = "";
+        document.getElementById("empHireDate").value = "";
+        document.getElementById("emprea").value = "";
+        
         loadEmployees();
 
     } catch (err) {
@@ -114,6 +177,8 @@ async function loadEmployees() {
 
         const data = await res.json();
         const tbody = document.getElementById("employeesTableBody");
+        if (!tbody) return;
+        
         tbody.innerHTML = "";
 
         data.users.forEach(u => {
@@ -127,7 +192,11 @@ async function loadEmployees() {
                 <td>${u.area_trabajo || "-"}</td>
                 <td>${u.huella_id || "-"}</td>
                 <td>${u.rfid || "-"}</td>
-                <td><button class="btn small" onclick="registerFingerprint(${u.id})">Registrar huella</button></td>
+                <td>
+                    <button class="btn small btn-fingerprint" onclick="registerFingerprint(${u.id})">
+                         Registrar huella
+                    </button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
@@ -139,11 +208,189 @@ async function loadEmployees() {
 }
 
 /*************************************
- * REGISTRAR HUELLA (SIMULADO)
+ * FUNCIONES ESP32
  *************************************/
-// Función mejorada para registrar huella
+
+// Configurar IP del ESP32
+function configureESP32IP() {
+    const currentIP = localStorage.getItem('esp32_ip') || '192.168.1.107';
+    const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
+    
+    if (newIP) {
+        if (newIP.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
+            localStorage.setItem('esp32_ip', newIP);
+            ESP32_BASE_URL = `http://${newIP}`;
+            document.getElementById('current-ip').textContent = newIP;
+            alert(' IP configurada correctamente: ' + newIP);
+            updateESP32Status();
+        } else {
+            alert(' Formato de IP inválido. Ejemplo: 192.168.1.107');
+        }
+    }
+}
+
+// Verificar estado del ESP32
+async function checkESP32Status() {
+    return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.timeout = 5000;
+        
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        resolve(data);
+                    } catch (e) {
+                        resolve({ status: 'ready', message: 'Conexión exitosa' });
+                    }
+                } else {
+                    resolve({ 
+                        status: 'offline', 
+                        error: xhr.status === 0 ? 'No se pudo conectar' : `Error ${xhr.status}`
+                    });
+                }
+            }
+        };
+        
+        xhr.ontimeout = function() {
+            resolve({ status: 'offline', error: 'Timeout - Sin respuesta' });
+        };
+        
+        xhr.onerror = function() {
+            resolve({ status: 'offline', error: 'Error de conexión' });
+        };
+        
+        xhr.open('GET', `${ESP32_BASE_URL}/status`, true);
+        xhr.send();
+    });
+}
+
+// Actualizar estado en la interfaz
+async function updateESP32Status() {
+    const statusElement = document.getElementById('esp32-status');
+    const infoElement = document.getElementById('esp32-info');
+    
+    if (!statusElement) {
+        console.log('Elemento esp32-status no encontrado');
+        return;
+    }
+    
+    statusElement.textContent = ' Consultando estado...';
+    statusElement.className = 'status-box';
+    
+    try {
+        const status = await checkESP32Status();
+        
+        if (status.status === 'ready') {
+            statusElement.innerHTML = 
+                ` ESP32 CONECTADO | IP: ${ESP32_BASE_URL}<br>` +
+                ` WiFi: ${status.ssid || 'Conectado'} (${status.rssi || '?'} dBm)<br>` +
+                ` Huella ID Actual: ${status.huella_id_actual || 'Ninguno'}<br>` +
+                ` Registro Activo: ${status.registro_activo ? 'Sí' : 'No'}`;
+            statusElement.className = 'status-box status-online';
+            
+            if (infoElement) {
+                infoElement.innerHTML = `
+                    <p><strong>Estado del Sistema:</strong> ${status.sistema_listo ? '✅ Listo' : '❌ No listo'}</p>
+                    <p><strong>Sensor de Huella:</strong> ${status.sistema_listo ? '✅ Conectado' : '❌ Desconectado'}</p>
+                    <p><strong>Último ID:</strong> ${status.huella_id_actual || 'Ninguno'}</p>
+                    <p><strong>Registro en Curso:</strong> ${status.registro_activo ? '🔄 Activo' : '✅ Inactivo'}</p>
+                `;
+            }
+        } else {
+            statusElement.innerHTML = 
+                ` ESP32 DESCONECTADO<br>` +
+                `Error: ${status.error || 'No se pudo conectar'}<br>` +
+                `IP: ${ESP32_BASE_URL}`;
+            statusElement.className = 'status-box status-offline';
+            
+            if (infoElement) {
+                infoElement.innerHTML = '<p>No se pudo obtener información del dispositivo.</p>';
+            }
+        }
+    } catch (error) {
+        statusElement.innerHTML = 
+            ` ERROR DE CONEXIÓN<br>` +
+            `Verifique la IP: ${ESP32_BASE_URL}`;
+        statusElement.className = 'status-box status-offline';
+        
+        if (infoElement) {
+            infoElement.innerHTML = '<p>Error al consultar el estado del dispositivo.</p>';
+        }
+    }
+}
+
+// Probar conexión al ESP32
+async function testESP32Connection() {
+    const status = await checkESP32Status();
+    if (status.status === 'ready') {
+        alert(' Conexión exitosa al ESP32\n\n' +
+              `IP: ${ESP32_BASE_URL}\n` +
+              `WiFi: ${status.ssid || 'Conectado'}\n` +
+              `Estado: ${status.sistema_listo ? 'Sistema Listo' : 'Sistema No Listo'}`);
+    } else {
+        alert(' No se pudo conectar al ESP32\n\n' +
+              `IP configurada: ${ESP32_BASE_URL}\n\n` +
+              `Verifique:\n` +
+              `• La IP que aparece en la pantalla del ESP32\n` +
+              `• Que el ESP32 esté encendido\n` +
+              `• Que estén en la misma red WiFi\n` +
+              `• Que no haya firewall bloqueando la conexión`);
+    }
+}
+
+// Función para enviar comando al ESP32
+async function sendCommandToESP32(huellaId) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.timeout = 10000;
+        
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data.status === 'success') {
+                            resolve(data);
+                        } else {
+                            reject(new Error(data.message || 'Error en la respuesta del ESP32'));
+                        }
+                    } catch (e) {
+                        resolve({ success: true, message: 'Comando enviado exitosamente' });
+                    }
+                } else {
+                    reject(new Error(`Error HTTP: ${xhr.status}`));
+                }
+            }
+        };
+        
+        xhr.ontimeout = function() {
+            reject(new Error('Timeout - El ESP32 no respondió'));
+        };
+        
+        xhr.onerror = function() {
+            reject(new Error('Error de conexión con el ESP32'));
+        };
+        
+        xhr.open('POST', `${ESP32_BASE_URL}/command`, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        
+        const payload = JSON.stringify({
+            command: 'REGISTER_FINGERPRINT',
+            huella_id: huellaId,
+            timestamp: Date.now()
+        });
+        
+        xhr.send(payload);
+    });
+}
+
+// Función para registrar huella
 async function registerFingerprint(userId) {
     try {
+        console.log("Iniciando registro de huella para usuario:", userId);
+        
         // 1. Obtener un ID de huella del backend
         const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
             method: "POST",
@@ -154,6 +401,10 @@ async function registerFingerprint(userId) {
             body: JSON.stringify({ user_id: userId })
         });
 
+        if (!assignResponse.ok) {
+            throw new Error('Error del servidor al asignar ID');
+        }
+
         const assignData = await assignResponse.json();
         
         if (!assignData.success) {
@@ -163,12 +414,14 @@ async function registerFingerprint(userId) {
 
         const huellaId = assignData.huella_id;
         
-        // 2. Mostrar información al usuario
+        // 2. Mostrar confirmación al usuario
         const userConfirmation = confirm(
-            `ID de Huella Asignado: ${huellaId}\n\n` +
-            `1. El sistema ESP32 se pondrá en modo registro\n` +
-            `2. Siga las instrucciones en la pantalla del dispositivo\n` +
-            `3. Registre su huella cuando se lo solicite\n\n` +
+            ` REGISTRO DE HUELLA\n\n` +
+            `ID Asignado: ${huellaId}\n` +
+            `Usuario ID: ${userId}\n\n` +
+            `El sistema ESP32 se activará en modo registro.\n` +
+            `Diríjase al dispositivo y siga las instrucciones\n` +
+            `en la pantalla.\n\n` +
             `¿Continuar con el registro?`
         );
         
@@ -176,79 +429,64 @@ async function registerFingerprint(userId) {
             return;
         }
 
-        // 3. Intentar conectar via HTTP (más confiable que WebSocket)
+        // 3. Enviar comando al ESP32
         await sendCommandToESP32(huellaId);
         
+        alert(' COMANDO ENVIADO EXITOSAMENTE\n\n' +
+              'El dispositivo ESP32 ha sido activado en modo registro.\n\n' +
+              'Por favor:\n' +
+              '1. Diríjase al dispositivo físico\n' + 
+              '2. Siga las instrucciones en la pantalla\n' +
+              '3. Complete el registro de su huella\n\n' +
+              'El sistema confirmará automáticamente cuando termine.');
+        
     } catch (err) {
-        alert("Error en el proceso de registro: " + err.message);
-        console.error(err);
+        console.error('Error en registro de huella:', err);
+        showManualInstructions(userId, err.message);
     }
 }
 
-// Función para enviar comando al ESP32
-async function sendCommandToESP32(huellaId) {
-    try {
-        // Obtener la IP del ESP32 (podrías tener un campo de configuración)
-        const esp32IP = localStorage.getItem('esp32_ip') || '192.168.1.100';
-        
-        const response = await fetch(`http://${esp32IP}/command`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                command: 'REGISTER_FINGERPRINT',
-                huella_id: huellaId,
-                timestamp: Date.now()
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Error HTTP: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-            alert('✅ Dispositivo ESP32 notificado\n\n' +
-                  'Por favor, diríjase al dispositivo y siga las instrucciones ' +
-                  'en la pantalla para completar el registro de su huella.');
-        } else {
-            throw new Error(data.message || 'Error en la respuesta del ESP32');
-        }
-        
-    } catch (error) {
-        console.error('Error conectando al ESP32:', error);
-        
-        // Fallback: Mostrar instrucciones manuales
-        alert(
-            '⚠️ No se pudo conectar automáticamente al ESP32\n\n' +
-            'Instrucciones manuales:\n' +
-            '1. Vaya al dispositivo ESP32\n' +
-            '2. En el menú, seleccione la opción 1 (Registrar Huella)\n' +
-            '3. El sistema le asignará automáticamente el ID: ' + huellaId + '\n' +
-            '4. Siga las instrucciones en pantalla\n\n' +
-            'Nota: Configure la IP del ESP32 en la configuración del sistema.'
-        );
-    }
+// Función de fallback para instrucciones manuales
+function showManualInstructions(userId, errorMsg) {
+    alert(
+        ` NO SE PUDO CONECTAR AL DISPOSITIVO\n\n` +
+        `Error: ${errorMsg}\n\n` +
+        `INSTRUCCIONES MANUALES:\n\n` +
+        `1. Vaya al dispositivo ESP32 físico\n` +
+        `2. En el menú, seleccione la opción 1 (Registrar Huella)\n` +
+        `3. Anote el ID que se asigne automáticamente\n` +
+        `4. Siga las instrucciones en pantalla\n\n` +
+        `CONFIGURACIÓN ACTUAL:\n` +
+        `• IP ESP32: ${ESP32_BASE_URL}\n` +
+        `• User ID: ${userId}`
+    );
 }
-
-// Función para configurar la IP del ESP32
-function configureESP32IP() {
-    const currentIP = localStorage.getItem('esp32_ip') || '192.168.1.100';
-    const newIP = prompt('Ingrese la IP del dispositivo ESP32:', currentIP);
-    
-    if (newIP) {
-        localStorage.setItem('esp32_ip', newIP);
-        alert('IP del ESP32 configurada: ' + newIP);
-    }
-}
-
-// Agregar botón de configuración en tu HTML o interfaz
 
 /*************************************
- * HORARIOS - LISTAR
+ * HORARIOS
  *************************************/
+function initializeSchedules() {
+    const btnOpenCreate = document.getElementById("btnOpenCreateSchedule");
+    if (btnOpenCreate) {
+        btnOpenCreate.addEventListener("click", () => openModal("createScheduleModal"));
+    }
+    
+    const btnSaveSchedule = document.getElementById("btnSaveSchedule");
+    if (btnSaveSchedule) {
+        btnSaveSchedule.addEventListener("click", saveSchedule);
+    }
+    
+    const btnSaveEdited = document.getElementById("btnSaveEditedSchedule");
+    if (btnSaveEdited) {
+        btnSaveEdited.addEventListener("click", saveEditedSchedule);
+    }
+    
+    const btnAssign = document.getElementById("btnAssignSchedule");
+    if (btnAssign) {
+        btnAssign.addEventListener("click", assignSchedule);
+    }
+}
+
 async function loadSchedules() {
     try {
         const res = await fetch(`${BASE_URL}/schedules/`, {
@@ -262,6 +500,8 @@ async function loadSchedules() {
 
         const schedules = await res.json();
         const container = document.getElementById("schedulesContainer");
+        if (!container) return;
+        
         container.innerHTML = "";
 
         schedules.forEach(s => {
@@ -289,18 +529,13 @@ async function loadSchedules() {
     }
 }
 
-/*************************************
- * HORARIOS - MODAL CREAR
- *************************************/
-document.getElementById("btnOpenCreateSchedule").onclick = () => openModal("createScheduleModal");
-
-document.getElementById("btnSaveSchedule").onclick = async () => {
-    const nombre = schName.value.trim();
-    const tipo = schTipo.value;
-    const entrada = schEntrada.value;
-    const salida = schSalida.value;
-    const tolEnt = schTolEnt.value;
-    const tolSal = schTolSal.value;
+async function saveSchedule() {
+    const nombre = document.getElementById("schName").value.trim();
+    const tipo = document.getElementById("schTipo").value;
+    const entrada = document.getElementById("schEntrada").value;
+    const salida = document.getElementById("schSalida").value;
+    const tolEnt = document.getElementById("schTolEnt").value;
+    const tolSal = document.getElementById("schTolSal").value;
 
     const dias = [...document.querySelectorAll(".sch-day:checked")].map(d => d.value);
 
@@ -343,19 +578,16 @@ document.getElementById("btnSaveSchedule").onclick = async () => {
         console.error(err);
         alert("Error en el servidor");
     }
-};
+}
 
-/*************************************
- * HORARIOS - EDITAR
- *************************************/
 function openEditSchedule(id, nombre, dias, tipo, entrada, tolEnt, salida, tolSal) {
     document.getElementById("editScheduleId").value = id;
-    editScheduleName.value = nombre;
-    editScheduleTipo.value = tipo;
-    editScheduleEntrada.value = entrada;
-    editScheduleTolEnt.value = tolEnt;
-    editScheduleSalida.value = salida;
-    editScheduleTolSal.value = tolSal;
+    document.getElementById("editScheduleName").value = nombre;
+    document.getElementById("editScheduleTipo").value = tipo;
+    document.getElementById("editScheduleEntrada").value = entrada;
+    document.getElementById("editScheduleTolEnt").value = tolEnt;
+    document.getElementById("editScheduleSalida").value = salida;
+    document.getElementById("editScheduleTolSal").value = tolSal;
 
     document.querySelectorAll(".edit-sch-day").forEach(chk => {
         chk.checked = dias.includes(chk.value);
@@ -364,19 +596,19 @@ function openEditSchedule(id, nombre, dias, tipo, entrada, tolEnt, salida, tolSa
     openModal("editScheduleModal");
 }
 
-document.getElementById("btnSaveEditedSchedule").onclick = async () => {
-    const id = editScheduleId.value;
+async function saveEditedSchedule() {
+    const id = document.getElementById("editScheduleId").value;
 
     const dias = [...document.querySelectorAll(".edit-sch-day:checked")].map(d => d.value);
 
     const payload = {
-        nombre: editScheduleName.value,
-        tipo: editScheduleTipo.value,
+        nombre: document.getElementById("editScheduleName").value,
+        tipo: document.getElementById("editScheduleTipo").value,
         dias: dias.join(","),
-        hora_entrada: editScheduleEntrada.value,
-        hora_salida: editScheduleSalida.value,
-        tolerancia_entrada: editScheduleTolEnt.value,
-        tolerancia_salida: editScheduleTolSal.value
+        hora_entrada: document.getElementById("editScheduleEntrada").value,
+        hora_salida: document.getElementById("editScheduleSalida").value,
+        tolerancia_entrada: document.getElementById("editScheduleTolEnt").value,
+        tolerancia_salida: document.getElementById("editScheduleTolSal").value
     };
 
     try {
@@ -405,15 +637,14 @@ document.getElementById("btnSaveEditedSchedule").onclick = async () => {
     }
 }
 
-/*************************************
- * ABRIR MODAL PARA ASIGNAR HORARIO
- *************************************/
 async function openAssignScheduleModal(scheduleId) {
     document.getElementById("assignScheduleId").value = scheduleId;
     openModal("assignScheduleModal");
 
     // CARGAR EMPLEADOS EN SELECT
     const userSelect = document.getElementById("assignUserSelect");
+    if (!userSelect) return;
+    
     userSelect.innerHTML = "<option>Cargando...</option>";
 
     try {
@@ -437,11 +668,6 @@ async function openAssignScheduleModal(scheduleId) {
         alert("Error cargando empleados");
     }
 }
-
-/*************************************
- * ASIGNAR HORARIO
- *************************************/
-document.getElementById("btnAssignSchedule").onclick = assignSchedule;
 
 async function assignSchedule() {
     const scheduleId = document.getElementById("assignScheduleId").value;
@@ -488,28 +714,12 @@ async function assignSchedule() {
 }
 
 /*************************************
- * CARGAR EMPLEADOS EN SELECT (ASISTENCIAS)
+ * ASISTENCIAS
  *************************************/
-async function loadAttendanceUsers() {
-    const select = document.getElementById("attendanceUserSelect");
-    select.innerHTML = "<option value=''>Todos</option>";
-
-    try {
-        const res = await fetch(`${BASE_URL}/users/?page=1&per_page=200`, {
-            headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
-        });
-
-        const data = await res.json();
-
-        data.users.forEach(u => {
-            select.innerHTML += `
-                <option value="${u.id}">
-                    ${u.nombre} ${u.apellido} (${u.username})
-                </option>`;
-        });
-    } catch (err) {
-        console.error(err);
-        alert("Error cargando usuarios para asistencias");
+function initializeAttendance() {
+    const btnLoadAttendance = document.getElementById("btnLoadAttendance");
+    if (btnLoadAttendance) {
+        btnLoadAttendance.addEventListener("click", loadAttendanceSummary);
     }
 }
 
@@ -527,6 +737,7 @@ async function loadUsersForAttendance() {
         
         const data = await res.json();
         const select = document.getElementById("attendanceUserSelect");
+        if (!select) return;
         
         // Mantener la opción "Todos"
         select.innerHTML = '<option value="">Todos</option>';
@@ -541,7 +752,6 @@ async function loadUsersForAttendance() {
         console.error("Error cargando usuarios:", err);
     }
 }
-
 
 async function loadAttendanceSummary() {
     console.log("Cargando reporte de admin...");
@@ -575,6 +785,8 @@ async function loadAttendanceSummary() {
 
         const data = await res.json();
         const tbody = document.getElementById("attendanceTableBody");
+        if (!tbody) return;
+        
         tbody.innerHTML = "";
 
         if (!data.asistencias || data.asistencias.length === 0) {
@@ -620,36 +832,34 @@ async function loadAttendanceSummary() {
     }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-    loadUsersForAttendance();
-    loadAttendanceSummary(); 
-    document.getElementById("btnLoadAttendance").addEventListener("click", loadAttendanceSummary);
-});
-
-
-document.getElementById("btnExportAttendance").onclick = () => {
-    const userId = document.getElementById("attendanceUserSelect").value;
-    const start = document.getElementById("attendanceStart").value;
-    const end = document.getElementById("attendanceEnd").value;
-    const mode = document.getElementById("attendanceMode").value;
-
-    let url = `${BASE_URL}/attendance/summary/export/csv?mode=${mode}`;
-
-    if (userId) url += `&user_id=${userId}`;
-    if (start) url += `&start_date=${start}`;
-    if (end) url += `&end_date=${end}`;
-
-    window.open(url, "_blank");
-};
-
 /*************************************
- * Hook al cambiar de sección
+ * INICIALIZACIÓN COMPLETA
  *************************************/
-function showSection(id) {
-    document.querySelectorAll(".pane").forEach(p => p.style.display = "none");
-    document.getElementById(id).style.display = "block";
-
-    if (id === "section-attendance") {
-        loadAttendanceUsers();
+document.addEventListener("DOMContentLoaded", function() {
+    console.log(" Inicializando Dashboard Admin...");
+    
+    // 1. Configurar IP inicial del ESP32
+    const savedIP = localStorage.getItem('esp32_ip');
+    if (savedIP) {
+        ESP32_BASE_URL = `http://${savedIP}`;
+        const currentIpElement = document.getElementById('current-ip');
+        if (currentIpElement) {
+            currentIpElement.textContent = savedIP;
+        }
     }
-};
+    
+    // 2. Inicializar todas las funcionalidades
+    initializeNavigation();
+    initializeEmployeeRegistration();
+    initializeSchedules();
+    initializeAttendance();
+    
+    // 3. Cargar datos iniciales
+    loadUsersForAttendance();
+    loadAttendanceSummary();
+    
+    // 4. Actualizar estado ESP32 cada 30 segundos
+    setInterval(updateESP32Status, 30000);
+    
+    console.log("Dashboard Admin inicializado correctamente");
+});
