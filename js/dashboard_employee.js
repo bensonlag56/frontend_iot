@@ -17,17 +17,21 @@
   function convertUTCToLima(utcDateString) {
     if (!utcDateString) return null;
     
-    const utcDate = new Date(utcDateString);
-    
-    // Lima está en UTC-5, pero durante horario de verano puede ser UTC-4
-    // Para simplificar, usaremos UTC-5 que es la mayoría del año
-    const limaOffset = -5 * 60; // UTC-5 en minutos
-    const localOffset = utcDate.getTimezoneOffset(); // Offset local del navegador
-    
-    // Ajustar la fecha a hora de Lima
-    const limaTime = new Date(utcDate.getTime() + (localOffset * 60 * 1000) + (limaOffset * 60 * 1000));
-    
-    return limaTime;
+    try {
+      const utcDate = new Date(utcDateString);
+      
+      // Lima está en UTC-5
+      const limaOffset = -5 * 60; // UTC-5 en minutos
+      const localOffset = utcDate.getTimezoneOffset(); // Offset local del navegador
+      
+      // Ajustar la fecha a hora de Lima
+      const limaTime = new Date(utcDate.getTime() + (localOffset * 60 * 1000) + (limaOffset * 60 * 1000));
+      
+      return limaTime;
+    } catch (error) {
+      console.error('Error convirtiendo fecha:', error);
+      return null;
+    }
   }
 
   // Formatear fecha para display (hora de Lima)
@@ -52,21 +56,6 @@
     });
   }
 
-  // Formatear fecha y hora completas (hora de Lima)
-  function formatDateTime(dateString) {
-    if (!dateString) return '—';
-    const date = convertUTCToLima(dateString);
-    if (!date) return '—';
-    return date.toLocaleString('es-ES', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Lima'
-    });
-  }
-
   // Obtener token JWT
   function getToken() {
     return localStorage.getItem('jwtToken');
@@ -75,11 +64,50 @@
   // Verificar autenticación
   function checkAuth() {
     const token = getToken();
-    if (!token) {
+    const user = localStorage.getItem('user');
+    
+    console.log('Verificando autenticación:', { 
+      token: token ? 'Presente' : 'Falta',
+      user: user ? 'Presente' : 'Falta'
+    });
+    
+    if (!token || !user) {
+      console.log('No autenticado, redirigiendo a login');
       window.location.href = '../pages/login.html';
       return false;
     }
-    return true;
+    
+    try {
+      currentUser = JSON.parse(user);
+      updateUserInfo();
+      return true;
+    } catch (error) {
+      console.error('Error parseando usuario:', error);
+      window.location.href = '../pages/login.html';
+      return false;
+    }
+  }
+
+  // Actualizar información del usuario en la UI
+  function updateUserInfo() {
+    if (!currentUser) return;
+    
+    const userNameEl = document.getElementById('userName');
+    const userAvatarEl = document.getElementById('userAvatar');
+    const userRoleEl = document.getElementById('userRole');
+    
+    if (userNameEl && currentUser.nombre) {
+      userNameEl.textContent = `${currentUser.nombre} ${currentUser.apellido || ''}`.trim();
+    }
+    
+    if (userAvatarEl && currentUser.nombre) {
+      const initials = (currentUser.nombre.charAt(0) + (currentUser.apellido ? currentUser.apellido.charAt(0) : '')).toUpperCase();
+      userAvatarEl.textContent = initials;
+    }
+    
+    if (userRoleEl) {
+      userRoleEl.textContent = currentUser.role === 'admin' ? 'Administrador' : 'Empleado';
+    }
   }
 
   // Fetch con autenticación
@@ -93,36 +121,49 @@
       ...options.headers
     };
 
+    console.log(`Haciendo request a: ${API_BASE}${url}`);
+
     try {
       const response = await fetch(`${API_BASE}${url}`, {
         ...options,
         headers
       });
 
+      console.log(`Response status: ${response.status}`);
+
       if (response.status === 401) {
         // Token expirado o inválido
         localStorage.removeItem('jwtToken');
+        localStorage.removeItem('user');
         window.location.href = '../pages/login.html';
         throw new Error('Sesión expirada');
       }
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`Error ${response.status}:`, errorText);
         throw new Error(`Error ${response.status}: ${errorText}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      console.log('Response data:', data);
+      return data;
     } catch (error) {
       console.error('Error en fetch:', error);
       throw error;
     }
   }
 
-  // Cargar asistencias del usuario
+  // Cargar asistencias del usuario - Versión mejorada con manejo de errores
   async function loadAttendances(startDate = null, endDate = null) {
     const loadingEl = document.getElementById('loadingAttendances');
     const noDataEl = document.getElementById('noAttendances');
     const tbody = document.querySelector('#myAttendancesTable tbody');
+
+    if (!loadingEl || !noDataEl || !tbody) {
+      console.error('Elementos del DOM no encontrados');
+      return;
+    }
 
     // Mostrar loading
     loadingEl.style.display = 'block';
@@ -130,12 +171,12 @@
     tbody.innerHTML = '';
 
     try {
-      // Usar el endpoint correcto: /attendance/history
+      // Intentar diferentes endpoints posibles
+      let attendances = [];
       let url = '/attendance/history';
       
-      // El endpoint /history usa paginación, así que podemos pedir más items
       const params = new URLSearchParams();
-      params.append('per_page', '100'); // Pedir más registros
+      params.append('per_page', '50');
       
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
@@ -144,17 +185,32 @@
         url += `?${params.toString()}`;
       }
 
+      console.log('Cargando asistencias desde:', url);
+      
       const data = await fetchWithAuth(url);
+      
+      // Manejar diferentes estructuras de respuesta
+      if (Array.isArray(data)) {
+        attendances = data;
+      } else if (data.items && Array.isArray(data.items)) {
+        attendances = data.items;
+      } else if (data.data && Array.isArray(data.data)) {
+        attendances = data.data;
+      } else if (data.attendances && Array.isArray(data.attendances)) {
+        attendances = data.attendances;
+      } else {
+        console.warn('Estructura de datos inesperada:', data);
+        attendances = [];
+      }
       
       loadingEl.style.display = 'none';
 
-      // El endpoint /history devuelve {items: [], page: X, total: Y}
-      const attendances = data.items || [];
-      
       if (attendances.length === 0) {
         noDataEl.style.display = 'block';
         return;
       }
+
+      console.log(`Mostrando ${attendances.length} asistencias`);
 
       // Renderizar tabla
       attendances.forEach(attendance => {
@@ -172,6 +228,9 @@
           duracion = `${hours}h ${minutes}m`;
         }
         
+        // Determinar estado
+        const estado = attendance.estado_entrada || attendance.status || '—';
+        
         tr.innerHTML = `
           <td>${entryDate ? entryDate.toLocaleDateString('es-ES', { timeZone: 'America/Lima' }) : '—'}</td>
           <td>${entryDate ? entryDate.toLocaleTimeString('es-ES', { 
@@ -185,8 +244,8 @@
             timeZone: 'America/Lima'
           }) : '—'}</td>
           <td>
-            <span class="status-badge ${getStatusClass(attendance.estado_entrada)}">
-              ${getStatusText(attendance.estado_entrada)}
+            <span class="status-badge ${getStatusClass(estado)}">
+              ${getStatusText(estado)}
             </span>
           </td>
           <td>${duracion}</td>
@@ -198,44 +257,67 @@
       loadingEl.style.display = 'none';
       console.error('Error cargando asistencias:', error);
       
-      // Mostrar mensaje más específico
-      if (error.message.includes('404')) {
-        alert('Endpoint no encontrado. Verifica la URL del API.');
-      } else if (error.message.includes('401')) {
-        alert('Sesión expirada. Por favor, inicia sesión nuevamente.');
-      } else {
-        alert('Error al cargar las asistencias: ' + error.message);
-      }
+      // Mostrar mensaje de error en la tabla
+      noDataEl.innerHTML = `
+        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
+        <p>Error al cargar las asistencias</p>
+        <p style="font-size: 0.9rem; margin-top: 10px; color: #7f8c8d;">
+          ${error.message}
+        </p>
+        <button onclick="loadAttendances()" class="btn primary" style="margin-top: 10px;">
+          <i class="fas fa-redo"></i> Reintentar
+        </button>
+      `;
+      noDataEl.style.display = 'block';
     }
   }
 
   // Clase CSS para estados
   function getStatusClass(status) {
+    if (!status) return 'status-default';
+    
     const statusMap = {
       'presente': 'status-present',
+      'a_tiempo': 'status-present',
       'tarde': 'status-late',
+      'late': 'status-late',
       'sin_horario': 'status-no-schedule',
-      'fuera_de_horario': 'status-outside'
+      'no_schedule': 'status-no-schedule',
+      'fuera_de_horario': 'status-outside',
+      'outside_schedule': 'status-outside',
+      'absent': 'status-outside'
     };
-    return statusMap[status] || 'status-default';
+    return statusMap[status.toLowerCase()] || 'status-default';
   }
 
   // Texto para estados
   function getStatusText(status) {
+    if (!status) return '—';
+    
     const textMap = {
       'presente': 'A tiempo',
+      'a_tiempo': 'A tiempo',
       'tarde': 'Tardanza',
+      'late': 'Tardanza',
       'sin_horario': 'Sin horario',
-      'fuera_de_horario': 'Fuera de horario'
+      'no_schedule': 'Sin horario',
+      'fuera_de_horario': 'Fuera de horario',
+      'outside_schedule': 'Fuera de horario',
+      'absent': 'Ausente'
     };
-    return textMap[status] || status || '—';
+    return textMap[status.toLowerCase()] || status || '—';
   }
 
-  // Cargar horario del usuario
+  // Cargar horario del usuario - Versión mejorada
   async function loadSchedule() {
     const loadingEl = document.getElementById('loadingSchedule');
     const noDataEl = document.getElementById('noSchedule');
     const scheduleCard = document.getElementById('myScheduleCard');
+
+    if (!loadingEl || !noDataEl || !scheduleCard) {
+      console.error('Elementos del DOM no encontrados');
+      return;
+    }
 
     loadingEl.style.display = 'block';
     noDataEl.style.display = 'none';
@@ -243,8 +325,23 @@
     scheduleCard.innerHTML = '';
 
     try {
-      // Usar el endpoint correcto para obtener el horario del usuario
-      const schedules = await fetchWithAuth('/schedules/my');
+      // Intentar diferentes endpoints posibles
+      let schedules = [];
+      
+      try {
+        const data = await fetchWithAuth('/schedules/my');
+        schedules = Array.isArray(data) ? data : (data.items || data.data || []);
+      } catch (error) {
+        console.log('Endpoint /schedules/my falló, intentando alternativas...');
+        // Intentar otro endpoint si el primero falla
+        try {
+          const data = await fetchWithAuth('/schedule/current');
+          schedules = Array.isArray(data) ? data : [data].filter(Boolean);
+        } catch (secondError) {
+          console.log('Todos los endpoints de horario fallaron');
+          throw new Error('No se pudo cargar el horario');
+        }
+      }
       
       loadingEl.style.display = 'none';
 
@@ -253,47 +350,68 @@
         return;
       }
 
-      // Tomar el primer horario (o podrías filtrar por fecha actual)
+      // Tomar el primer horario (podrías filtrar por fecha actual)
       const currentSchedule = schedules[0];
       
       // Formatear los días para mejor visualización
-      const diasFormateados = currentSchedule.dias.split(',').map(dia => {
-        const diasCompletos = {
-          'Lun': 'Lunes',
-          'Mar': 'Martes',
-          'Mie': 'Miércoles',
-          'Jue': 'Jueves',
-          'Vie': 'Viernes',
-          'Sab': 'Sábado',
-          'Dom': 'Domingo'
-        };
-        return diasCompletos[dia.trim()] || dia;
-      }).join(', ');
+      let diasFormateados = 'No especificado';
+      if (currentSchedule.dias) {
+        diasFormateados = currentSchedule.dias.split(',').map(dia => {
+          const diasCompletos = {
+            'Lun': 'Lunes',
+            'Mar': 'Martes',
+            'Mie': 'Miércoles',
+            'Mier': 'Miércoles',
+            'Jue': 'Jueves',
+            'Vie': 'Viernes',
+            'Sab': 'Sábado',
+            'Dom': 'Domingo',
+            'Mon': 'Lunes',
+            'Tue': 'Martes',
+            'Wed': 'Miércoles',
+            'Thu': 'Jueves',
+            'Fri': 'Viernes',
+            'Sat': 'Sábado',
+            'Sun': 'Domingo'
+          };
+          return diasCompletos[dia.trim()] || dia.trim();
+        }).join(', ');
+      }
 
       scheduleCard.innerHTML = `
         <div class="schedule-card">
-          <h3>${currentSchedule.nombre}</h3>
+          <h3>${currentSchedule.nombre || 'Horario asignado'}</h3>
           <div class="schedule-details">
+            ${currentSchedule.hora_entrada ? `
             <div class="schedule-item">
               <span class="schedule-label"><i class="fas fa-clock"></i> Horario:</span>
-              <span class="schedule-value">${currentSchedule.hora_entrada} - ${currentSchedule.hora_salida} (Hora Lima)</span>
+              <span class="schedule-value">${currentSchedule.hora_entrada} - ${currentSchedule.hora_salida || 'No definido'} (Hora Lima)</span>
             </div>
+            ` : ''}
+            ${currentSchedule.dias ? `
             <div class="schedule-item">
               <span class="schedule-label"><i class="fas fa-calendar-day"></i> Días:</span>
               <span class="schedule-value">${diasFormateados}</span>
             </div>
+            ` : ''}
+            ${currentSchedule.tolerancia_entrada ? `
             <div class="schedule-item">
               <span class="schedule-label"><i class="fas fa-user-clock"></i> Tolerancia entrada:</span>
               <span class="schedule-value">${currentSchedule.tolerancia_entrada} minutos</span>
             </div>
+            ` : ''}
+            ${currentSchedule.tolerancia_salida ? `
             <div class="schedule-item">
               <span class="schedule-label"><i class="fas fa-user-clock"></i> Tolerancia salida:</span>
               <span class="schedule-value">${currentSchedule.tolerancia_salida} minutos</span>
             </div>
+            ` : ''}
+            ${currentSchedule.tipo ? `
             <div class="schedule-item">
               <span class="schedule-label"><i class="fas fa-tag"></i> Tipo:</span>
               <span class="schedule-value">${currentSchedule.tipo === 'fijo' ? 'Horario Fijo' : 'Horario Rotativo'}</span>
             </div>
+            ` : ''}
             ${currentSchedule.start_date ? `
             <div class="schedule-item">
               <span class="schedule-label"><i class="fas fa-calendar-check"></i> Vigente desde:</span>
@@ -319,24 +437,16 @@
       noDataEl.style.display = 'block';
       console.error('Error cargando horario:', error);
       
-      // Mostrar mensaje de error específico
-      if (error.message.includes('404')) {
-        noDataEl.innerHTML = `
-          <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
-          <p>Endpoint de horarios no disponible</p>
-          <p style="font-size: 0.9rem; margin-top: 10px; color: #7f8c8d;">
-            Contacta con administración para más información
-          </p>
-        `;
-      } else {
-        noDataEl.innerHTML = `
-          <i class="fas fa-exclamation-circle" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
-          <p>Error al cargar el horario</p>
-          <p style="font-size: 0.9rem; margin-top: 10px; color: #7f8c8d;">
-            ${error.message}
-          </p>
-        `;
-      }
+      noDataEl.innerHTML = `
+        <i class="fas fa-exclamation-circle" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
+        <p>Error al cargar el horario</p>
+        <p style="font-size: 0.9rem; margin-top: 10px; color: #7f8c8d;">
+          ${error.message}
+        </p>
+        <button onclick="loadSchedule()" class="btn primary" style="margin-top: 10px;">
+          <i class="fas fa-redo"></i> Reintentar
+        </button>
+      `;
     }
   }
 
@@ -346,6 +456,11 @@
     const clearFilterBtn = document.getElementById('clearFilterBtn');
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
+
+    if (!filterBtn || !clearFilterBtn || !startDateInput || !endDateInput) {
+      console.error('Elementos de filtro no encontrados');
+      return;
+    }
 
     // Establecer fechas por defecto (últimos 30 días)
     const endDate = new Date();
@@ -414,23 +529,32 @@
 
   // Mostrar hora actual de Lima
   function updateLimaTime() {
-    const now = new Date();
-    const limaTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Lima"}));
-    
-    // Actualizar en el header si existe el elemento
-    const limaTimeElement = document.getElementById('limaTime');
-    if (limaTimeElement) {
-      limaTimeElement.textContent = `Hora Lima: ${limaTime.toLocaleTimeString('es-ES', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
-      })}`;
+    try {
+      const now = new Date();
+      const limaTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Lima"}));
+      
+      // Actualizar en el header si existe el elemento
+      const limaTimeElement = document.getElementById('limaTime');
+      if (limaTimeElement) {
+        limaTimeElement.textContent = `Hora Lima: ${limaTime.toLocaleTimeString('es-ES', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          second: '2-digit'
+        })}`;
+      }
+    } catch (error) {
+      console.error('Error actualizando hora Lima:', error);
     }
   }
 
   // Inicializar
   async function init() {
-    if (!checkAuth()) return;
+    console.log('Inicializando dashboard empleado...');
+    
+    if (!checkAuth()) {
+      console.log('Usuario no autenticado');
+      return;
+    }
 
     try {
       wireEvents();
@@ -444,11 +568,17 @@
       showSection('section-my-attendances');
       await loadAttendances();
       
+      console.log('Dashboard inicializado correctamente');
+      
     } catch (error) {
       console.error('Error inicializando dashboard:', error);
       alert('Error al inicializar el dashboard: ' + error.message);
     }
   }
+
+  // Hacer funciones globales para los botones de reintento
+  window.loadAttendances = loadAttendances;
+  window.loadSchedule = loadSchedule;
 
   // Iniciar cuando el DOM esté listo
   if (document.readyState === 'loading') {
