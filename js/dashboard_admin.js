@@ -141,9 +141,110 @@ async function loadEmployees() {
 /*************************************
  * REGISTRAR HUELLA (SIMULADO)
  *************************************/
-function registerFingerprint(userId) {
-    alert("Aquí se enviaría la orden al ESP32 para registrar la huella del usuario ID " + userId);
+// Función mejorada para registrar huella
+async function registerFingerprint(userId) {
+    try {
+        // 1. Obtener un ID de huella del backend
+        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("token")
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+
+        const assignData = await assignResponse.json();
+        
+        if (!assignData.success) {
+            alert("Error asignando ID de huella: " + assignData.message);
+            return;
+        }
+
+        const huellaId = assignData.huella_id;
+        
+        // 2. Mostrar información al usuario
+        const userConfirmation = confirm(
+            `ID de Huella Asignado: ${huellaId}\n\n` +
+            `1. El sistema ESP32 se pondrá en modo registro\n` +
+            `2. Siga las instrucciones en la pantalla del dispositivo\n` +
+            `3. Registre su huella cuando se lo solicite\n\n` +
+            `¿Continuar con el registro?`
+        );
+        
+        if (!userConfirmation) {
+            return;
+        }
+
+        // 3. Intentar conectar via HTTP (más confiable que WebSocket)
+        await sendCommandToESP32(huellaId);
+        
+    } catch (err) {
+        alert("Error en el proceso de registro: " + err.message);
+        console.error(err);
+    }
 }
+
+// Función para enviar comando al ESP32
+async function sendCommandToESP32(huellaId) {
+    try {
+        // Obtener la IP del ESP32 (podrías tener un campo de configuración)
+        const esp32IP = localStorage.getItem('esp32_ip') || '192.168.1.100';
+        
+        const response = await fetch(`http://${esp32IP}/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                command: 'REGISTER_FINGERPRINT',
+                huella_id: huellaId,
+                timestamp: Date.now()
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ Dispositivo ESP32 notificado\n\n' +
+                  'Por favor, diríjase al dispositivo y siga las instrucciones ' +
+                  'en la pantalla para completar el registro de su huella.');
+        } else {
+            throw new Error(data.message || 'Error en la respuesta del ESP32');
+        }
+        
+    } catch (error) {
+        console.error('Error conectando al ESP32:', error);
+        
+        // Fallback: Mostrar instrucciones manuales
+        alert(
+            '⚠️ No se pudo conectar automáticamente al ESP32\n\n' +
+            'Instrucciones manuales:\n' +
+            '1. Vaya al dispositivo ESP32\n' +
+            '2. En el menú, seleccione la opción 1 (Registrar Huella)\n' +
+            '3. El sistema le asignará automáticamente el ID: ' + huellaId + '\n' +
+            '4. Siga las instrucciones en pantalla\n\n' +
+            'Nota: Configure la IP del ESP32 en la configuración del sistema.'
+        );
+    }
+}
+
+// Función para configurar la IP del ESP32
+function configureESP32IP() {
+    const currentIP = localStorage.getItem('esp32_ip') || '192.168.1.100';
+    const newIP = prompt('Ingrese la IP del dispositivo ESP32:', currentIP);
+    
+    if (newIP) {
+        localStorage.setItem('esp32_ip', newIP);
+        alert('IP del ESP32 configurada: ' + newIP);
+    }
+}
+
+// Agregar botón de configuración en tu HTML o interfaz
 
 /*************************************
  * HORARIOS - LISTAR
@@ -412,51 +513,120 @@ async function loadAttendanceUsers() {
     }
 }
 
-/*************************************
- * RESUMEN DE ASISTENCIAS
- *************************************/
-document.getElementById("btnLoadAttendance").onclick = loadAttendanceSummary;
-
-async function loadAttendanceSummary() {
-    const userId = document.getElementById("attendanceUserSelect").value;
-    const start = document.getElementById("attendanceStart").value;
-    const end = document.getElementById("attendanceEnd").value;
-    const mode = document.getElementById("attendanceMode").value;
-
-    let url = `${BASE_URL}/attendance/history`;
-
-    if (userId) url += `&user_id=${userId}`;
-    if (start) url += `&start_date=${start}`;
-    if (end) url += `&end_date=${end}`;
-
+async function loadUsersForAttendance() {
     try {
-        const res = await fetch(url, {
-            headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+        const res = await fetch(`${BASE_URL}/attendance/admin/users`, {
+            method: 'GET',
+            headers: { 
+                "Authorization": "Bearer " + localStorage.getItem("token"),
+                "Content-Type": "application/json"
+            }
         });
 
+        if (!res.ok) throw new Error('Error al cargar usuarios');
+        
         const data = await res.json();
-
-        const tbody = document.getElementById("attendanceTableBody");
-        tbody.innerHTML = "";
-
-        data.forEach(r => {
-            tbody.innerHTML += `
-                <tr>
-                    <td>${r.user_id}</td>
-                    <td>${r.period}</td>
-                    <td>${r.total_registros}</td>
-                </tr>
-            `;
+        const select = document.getElementById("attendanceUserSelect");
+        
+        // Mantener la opción "Todos"
+        select.innerHTML = '<option value="">Todos</option>';
+        
+        data.users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.nombre} ${user.apellido} (${user.area_trabajo || 'Sin área'})`;
+            select.appendChild(option);
         });
     } catch (err) {
-        console.error(err);
-        alert("Error generando resumen");
+        console.error("Error cargando usuarios:", err);
     }
 }
 
-/*************************************
- * EXPORTAR CSV
- *************************************/
+
+async function loadAttendanceSummary() {
+    console.log("Cargando reporte de admin...");
+
+    const userId = document.getElementById("attendanceUserSelect").value;
+    const start = document.getElementById("attendanceStart").value;
+    const end = document.getElementById("attendanceEnd").value;
+    const area = document.getElementById("attendanceArea").value; 
+    
+    const params = new URLSearchParams();
+    if (userId) params.append("user_id", userId);
+    if (start) params.append("start_date", start);
+    if (end) params.append("end_date", end);
+    if (area) params.append("area", area);
+
+    const url = `${BASE_URL}/attendance/admin/report?${params}`;
+
+    try {
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: { 
+                "Authorization": "Bearer " + localStorage.getItem("token"),
+                "Content-Type": "application/json"
+            }
+        });
+
+        if (!res.ok) {
+            const errorTxt = await res.text();
+            throw new Error(`Error ${res.status}: ${errorTxt}`);
+        }
+
+        const data = await res.json();
+        const tbody = document.getElementById("attendanceTableBody");
+        tbody.innerHTML = "";
+
+        if (!data.asistencias || data.asistencias.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center">No se encontraron registros</td></tr>`;
+            return;
+        }
+
+        const formatLimaDate = (isoString) => {
+            if (!isoString) return "---";
+            return new Date(isoString).toLocaleString("es-PE", {
+                timeZone: "America/Lima",
+                hour12: false
+            });
+        };
+
+        data.asistencias.forEach(r => {
+            const entryStr = formatLimaDate(r.entry_time);
+            const exitStr = formatLimaDate(r.exit_time);
+            const nombreCompleto = `${r.nombre} ${r.apellido}`;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>
+                        <strong>${nombreCompleto}</strong><br>
+                        <small style="color:gray;">${r.username}</small>
+                    </td>
+                    <td>${r.area_trabajo || "N/A"}</td>
+                    <td>${entryStr}</td>
+                    <td>${exitStr}</td>
+                    <td>${r.duracion_jornada || "En curso"}</td>
+                    <td>
+                        <span class="estado-badge estado-${r.estado_entrada}">
+                            ${r.estado_entrada}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+
+    } catch (err) {
+        console.error("Error al cargar asistencias:", err);
+        alert("Error generando resumen: " + err.message);
+    }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+    loadUsersForAttendance();
+    loadAttendanceSummary(); 
+    document.getElementById("btnLoadAttendance").addEventListener("click", loadAttendanceSummary);
+});
+
+
 document.getElementById("btnExportAttendance").onclick = () => {
     const userId = document.getElementById("attendanceUserSelect").value;
     const start = document.getElementById("attendanceStart").value;
@@ -483,4 +653,3 @@ function showSection(id) {
         loadAttendanceUsers();
     }
 };
-

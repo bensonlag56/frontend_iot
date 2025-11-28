@@ -1,3 +1,4 @@
+// js/login.js - Versión corregida
 (() => {
     const BASE_URL = "https://asistencia-iot-api.onrender.com";
 
@@ -38,12 +39,12 @@
                 return;
             }
 
-            // Guardar token e info del usuario
-            localStorage.setItem("token", data.access_token);
+         
+            localStorage.setItem("jwtToken", data.access_token); 
             localStorage.setItem("user", JSON.stringify(data.user));
 
-            // Redirigir según rol
-            if (data.user.role === "admin") {
+
+            if (data.user.is_admin) {
                 window.location.href = "../pages/dashboard_admin.html";
             } else {
                 window.location.href = "../pages/dashboard_employee.html";

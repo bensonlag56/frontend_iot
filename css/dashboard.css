@@ -249,3 +249,29 @@ h2 {
   from { opacity: 0; transform: translateY(-5px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.estado-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.estado-presente {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.estado-tarde {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.estado-sin_horario {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+.estado-fuera_de_horario {
+    background-color: #f8d7da;
+    color: #721c24;
+}

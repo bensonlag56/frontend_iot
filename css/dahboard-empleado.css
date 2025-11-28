@@ -1,0 +1,67 @@
+/* Estilos para badges de estado */
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.status-present {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+}
+
+.status-late {
+  background-color: #fff3e0;
+  color: #ef6c00;
+}
+
+.status-no-schedule {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.status-outside {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.status-default {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Filtros */
+.filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filters label {
+  font-weight: 500;
+  color: #555;
+}
+
+.filters input[type="date"] {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Loading states */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+  font-style: italic;
+}

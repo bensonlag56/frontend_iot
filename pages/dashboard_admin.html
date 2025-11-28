@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dashboard Admin - Sistema de Asistencias</title>
   <link rel="stylesheet" href="../css/dashboard.css" />
+  <link rel="stylesheet" href="../css/style.css"/>
 </head>
 <body>
 
@@ -106,14 +107,46 @@
       <!-- ASISTENCIAS -->
       <!-- ============= -->
       <section id="section-admin-attendances" class="pane" style="display:none;">
-        <h2>Asistencias de empleados</h2>
-        <table class="table">
-          <thead>
-            <tr><th>Empleado</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </section>
+    <h2>Reporte de Asistencias (Admin)</h2>
+
+    <div class="filters" style="margin-bottom: 15px; display:flex; gap:10px; flex-wrap:wrap;">
+        <div>
+            <label>Empleado:</label>
+            <select id="attendanceUserSelect" class="form-control">
+                <option value="">Todos</option>
+            </select>
+        </div>
+        <div>
+            <label>Desde:</label>
+            <input type="date" id="attendanceStart" class="form-control">
+        </div>
+        <div>
+            <label>Hasta:</label>
+            <input type="date" id="attendanceEnd" class="form-control">
+        </div>
+        <div>
+            <label>Área:</label>
+            <input type="text" id="attendanceArea" placeholder="Ej: Cocina" class="form-control">
+        </div>
+        
+        <button id="btnLoadAttendance" class="btn primary">Buscar</button>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Empleado</th>
+                <th>Área</th>
+                <th>Entrada</th>
+                <th>Salida</th>
+                <th>Duración</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="attendanceTableBody">
+            </tbody>
+    </table>
+</section>
 
     </main>
   </div>

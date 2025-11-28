@@ -29,3 +29,90 @@ color: white;
 border: none;
 cursor: pointer;
 }
+/* Fuente global */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Caja principal */
+.login-container {
+    width: 350px;
+    background: #ffffffee;
+    padding: 40px 35px;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    backdrop-filter: blur(4px);
+    text-align: center;
+}
+
+.login-container h2 {
+    margin-bottom: 25px;
+    font-weight: 600;
+    color: #2a2a2a;
+}
+
+/* Grupo de inputs */
+.input-group {
+    position: relative;
+    margin-bottom: 25px;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 10px;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    font-size: 15px;
+    outline: none;
+    transition: 0.25s;
+}
+
+/* Label animado */
+.input-group label {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+    background: white;
+    padding: 0 6px;
+    color: #666;
+    pointer-events: none;
+    transition: 0.25s;
+}
+
+/* Efecto cuando el input está activo */
+.input-group input:focus {
+    border-color: #3a7bd5;
+}
+
+.input-group input:focus + label,
+.input-group input:not(:placeholder-shown) + label {
+    top: -8px;
+    font-size: 12px;
+    color: #3a7bd5;
+}
+
+/* Botón */
+button {
+    width: 100%;
+    padding: 12px;
+    background: #3a7bd5;
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+button:hover {
+    background: #005bb5;
+}
