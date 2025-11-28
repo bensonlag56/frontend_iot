@@ -2,7 +2,7 @@
  * CONFIGURACIÓN GLOBAL
  *************************************/
 const BASE_URL = "https://asistencia-iot-api.onrender.com";
-let ESP32_BASE_URL = 'http://172.20.10.13'; // IP por defecto
+let ESP32_BASE_URL = '10.139.102.152'; // IP por defecto
 
 /*************************************
  * UTILIDADES
@@ -213,7 +213,7 @@ async function loadEmployees() {
 
 // Configurar IP del ESP32
 function configureESP32IP() {
-    const currentIP = localStorage.getItem('esp32_ip') || 'http://172.20.10.13';
+    const currentIP = localStorage.getItem('esp32_ip') || '10.139.102.152';
     const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
     
     if (newIP) {
@@ -224,7 +224,7 @@ function configureESP32IP() {
             alert(' IP configurada correctamente: ' + newIP);
             updateESP32Status();
         } else {
-            alert(' Formato de IP inválido. Ejemplo: http://172.20.10.13');
+            alert(' Formato de IP inválido. Ejemplo: 10.139.102.152');
         }
     }
 }
