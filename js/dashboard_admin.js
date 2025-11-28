@@ -131,7 +131,7 @@ async function registerEmployee() {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("token")
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
             },
             body: JSON.stringify(payload)
         });
@@ -167,7 +167,7 @@ async function registerEmployee() {
 async function loadEmployees() {
     try {
         const res = await fetch(`${BASE_URL}/users/?page=1&per_page=50`, {
-            headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+            headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
         });
 
         if (!res.ok) {
@@ -396,7 +396,7 @@ async function registerFingerprint(userId) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("token")
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
             },
             body: JSON.stringify({ user_id: userId })
         });
@@ -490,7 +490,7 @@ function initializeSchedules() {
 async function loadSchedules() {
     try {
         const res = await fetch(`${BASE_URL}/schedules/`, {
-            headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+            headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
         });
 
         if (!res.ok) {
@@ -559,7 +559,7 @@ async function saveSchedule() {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("token")
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
             },
             body: JSON.stringify(payload)
         });
@@ -616,7 +616,7 @@ async function saveEditedSchedule() {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("token")
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
             },
             body: JSON.stringify(payload)
         });
@@ -649,7 +649,7 @@ async function openAssignScheduleModal(scheduleId) {
 
     try {
         const res = await fetch(`${BASE_URL}/users/?page=1&per_page=200`, {
-            headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+            headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
         });
 
         const data = await res.json();
@@ -692,7 +692,7 @@ async function assignSchedule() {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("token")
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
             },
             body: JSON.stringify(payload)
         });
@@ -728,7 +728,7 @@ async function loadUsersForAttendance() {
         const res = await fetch(`${BASE_URL}/attendance/admin/users`, {
             method: 'GET',
             headers: { 
-                "Authorization": "Bearer " + localStorage.getItem("token"),
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken"),
                 "Content-Type": "application/json"
             }
         });
@@ -773,7 +773,7 @@ async function loadAttendanceSummary() {
         const res = await fetch(url, {
             method: 'GET',
             headers: { 
-                "Authorization": "Bearer " + localStorage.getItem("token"),
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken"),
                 "Content-Type": "application/json"
             }
         });
