@@ -6,6 +6,100 @@
   <title>Dashboard Admin - Sistema de Asistencias</title>
   <link rel="stylesheet" href="../css/dashboard.css" />
   <link rel="stylesheet" href="../css/style.css"/>
+  <style>
+    /* Estilos adicionales para el control ESP32 */
+    .esp32-controls {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+      border-left: 4px solid #007bff;
+      border: 1px solid #dee2e6;
+    }
+
+    .status-box {
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+      font-weight: bold;
+      font-family: monospace;
+      background: #e9ecef;
+    }
+
+    .status-online {
+      background: #d4edda;
+      color: #155724;
+      border-left: 4px solid #28a745;
+    }
+
+    .status-offline {
+      background: #f8d7da;
+      color: #721c24;
+      border-left: 4px solid #dc3545;
+    }
+
+    .btn-config {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+      font-size: 14px;
+    }
+
+    .btn-refresh {
+      background: #17a2b8;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .ip-info {
+      margin-top: 10px;
+      font-family: monospace;
+      background: #e9ecef;
+      padding: 8px;
+      border-radius: 3px;
+      font-size: 14px;
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 5px;
+    }
+
+    .btn-fingerprint {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .btn-rfid {
+      background: #ffc107;
+      color: black;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+  </style>
 </head>
 <body>
 
@@ -22,6 +116,7 @@
         <button id="nav-list-employees" class="sidebar-btn">Lista de empleados</button>
         <button id="nav-schedules" class="sidebar-btn">Horarios</button>
         <button id="nav-attendances" class="sidebar-btn">Asistencias</button>
+        <button id="nav-esp32-control" class="sidebar-btn">Control ESP32</button>
       </nav>
 
       <div style="margin-top:auto;">
@@ -107,211 +202,140 @@
       <!-- ASISTENCIAS -->
       <!-- ============= -->
       <section id="section-admin-attendances" class="pane" style="display:none;">
-    <h2>Reporte de Asistencias (Admin)</h2>
+        <h2>Reporte de Asistencias (Admin)</h2>
 
-    <div class="filters" style="margin-bottom: 15px; display:flex; gap:10px; flex-wrap:wrap;">
-        <div>
-            <label>Empleado:</label>
-            <select id="attendanceUserSelect" class="form-control">
-                <option value="">Todos</option>
-            </select>
+        <div class="filters" style="margin-bottom: 15px; display:flex; gap:10px; flex-wrap:wrap;">
+            <div>
+                <label>Empleado:</label>
+                <select id="attendanceUserSelect" class="form-control">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div>
+                <label>Desde:</label>
+                <input type="date" id="attendanceStart" class="form-control">
+            </div>
+            <div>
+                <label>Hasta:</label>
+                <input type="date" id="attendanceEnd" class="form-control">
+            </div>
+            <div>
+                <label>Área:</label>
+                <input type="text" id="attendanceArea" placeholder="Ej: Cocina" class="form-control">
+            </div>
+            
+            <button id="btnLoadAttendance" class="btn primary">Buscar</button>
         </div>
-        <div>
-            <label>Desde:</label>
-            <input type="date" id="attendanceStart" class="form-control">
-        </div>
-        <div>
-            <label>Hasta:</label>
-            <input type="date" id="attendanceEnd" class="form-control">
-        </div>
-        <div>
-            <label>Área:</label>
-            <input type="text" id="attendanceArea" placeholder="Ej: Cocina" class="form-control">
-        </div>
-        
-        <button id="btnLoadAttendance" class="btn primary">Buscar</button>
-    </div>
 
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Empleado</th>
-                <th>Área</th>
-                <th>Entrada</th>
-                <th>Salida</th>
-                <th>Duración</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody id="attendanceTableBody">
-            </tbody>
-    </table>
-</section>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Empleado</th>
+                    <th>Área</th>
+                    <th>Entrada</th>
+                    <th>Salida</th>
+                    <th>Duración</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody id="attendanceTableBody"></tbody>
+        </table>
+      </section>
+
+      <!-- ============= -->
+      <!-- CONTROL ESP32 -->
+      <!-- ============= -->
+      <section id="section-esp32-control" class="pane" style="display:none;">
+        <h2> Control del Dispositivo ESP32</h2>
+
+        <div class="esp32-controls">
+          <h3>Estado del Sistema</h3>
+          
+          <div id="esp32-status" class="status-box status-offline">
+             ESP32 DESCONECTADO - Configure la IP primero
+          </div>
+          
+          <div class="control-buttons">
+            <button onclick="configureESP32IP()" class="btn-config">
+               Configurar IP ESP32
+            </button>
+            
+            <button onclick="updateESP32Status()" class="btn-refresh">
+               Actualizar Estado
+            </button>
+
+            <button onclick="testESP32Connection()" class="btn primary">
+               Probar Conexión
+            </button>
+          </div>
+          
+          <div class="ip-info">
+            IP Actual: <span id="current-ip">No configurada</span>
+          </div>
+
+          <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
+            <strong> Instrucciones:</strong>
+            <ol style="margin: 10px 0; padding-left: 20px;">
+              <li>Anote la IP que aparece en la pantalla del ESP32</li>
+              <li>Haga clic en "Configurar IP ESP32" e ingrese la IP</li>
+              <li>Verifique que el estado cambie a "CONECTADO"</li>
+              <li>Ahora puede registrar huellas desde la lista de empleados</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="esp32-controls">
+          <h3> Información del Dispositivo</h3>
+          <div id="esp32-info">
+            <p>Esperando conexión...</p>
+          </div>
+        </div>
+      </section>
 
     </main>
   </div>
 
-  <!-- ========================= -->
-  <!-- MODAL CREAR HORARIO -->
-  <!-- ========================= -->
+  <!-- MODALES (mantener igual) -->
   <div id="createScheduleModal" class="modal" style="display:none;">
-    <div class="modal-content">
-
-      <h3>Crear Horario</h3>
-
-      <label>Nombre</label>
-      <input id="schName" type="text">
-
-      <label>Días</label>
-      <div class="days-grid">
-        <label><input type="checkbox" class="sch-day" value="Lun"> Lun</label>
-        <label><input type="checkbox" class="sch-day" value="Mar"> Mar</label>
-        <label><input type="checkbox" class="sch-day" value="Mie"> Mie</label>
-        <label><input type="checkbox" class="sch-day" value="Jue"> Jue</label>
-        <label><input type="checkbox" class="sch-day" value="Vie"> Vie</label>
-        <label><input type="checkbox" class="sch-day" value="Sab"> Sab</label>
-        <label><input type="checkbox" class="sch-day" value="Dom"> Dom</label>
-      </div>
-
-      <label>Tipo</label>
-      <select id="schTipo">
-        <option value="fijo">Fijo</option>
-        <option value="rotativo">Rotativo</option>
-      </select>
-
-      <label>Hora Entrada</label>
-      <input type="time" id="schEntrada">
-
-      <label>Tolerancia Entrada (min)</label>
-      <input type="number" id="schTolEnt" value="0">
-
-      <label>Hora Salida</label>
-      <input type="time" id="schSalida">
-
-      <label>Tolerancia Salida (min)</label>
-      <input type="number" id="schTolSal" value="0">
-
-      <div class="modal-actions">
-        <button id="btnSaveSchedule" class="btn primary">Guardar</button>
-        <button class="btn secondary" onclick="closeModal('createScheduleModal')">Cancelar</button>
-      </div>
-
-    </div>
+    <!-- ... contenido del modal ... -->
   </div>
 
-  <!-- ============= -->
-  <!-- MODAL EDITAR HORARIO -->
-  <!-- ============= -->
   <div id="editScheduleModal" class="modal" style="display:none;">
-    <div class="modal-content">
-
-      <h3>Modificar Horario</h3>
-
-      <input type="hidden" id="editScheduleId">
-
-      <label>Nombre</label>
-      <input id="editScheduleName" type="text">
-
-      <label>Días</label>
-      <div class="days-grid">
-        <label><input type="checkbox" class="edit-sch-day" value="Lun"> Lun</label>
-        <label><input type="checkbox" class="edit-sch-day" value="Mar"> Mar</label>
-        <label><input type="checkbox" class="edit-sch-day" value="Mie"> Mie</label>
-        <label><input type="checkbox" class="edit-sch-day" value="Jue"> Jue</label>
-        <label><input type="checkbox" class="edit-sch-day" value="Vie"> Vie</label>
-        <label><input type="checkbox" class="edit-sch-day" value="Sab"> Sab</label>
-        <label><input type="checkbox" class="edit-sch-day" value="Dom"> Dom</label>
-      </div>
-
-      <label>Tipo</label>
-      <select id="editScheduleTipo">
-        <option value="fijo">Fijo</option>
-        <option value="rotativo">Rotativo</option>
-      </select>
-
-      <label>Hora Entrada</label>
-      <input type="time" id="editScheduleEntrada">
-
-      <label>Tolerancia Entrada</label>
-      <input type="number" id="editScheduleTolEnt">
-
-      <label>Hora Salida</label>
-      <input type="time" id="editScheduleSalida">
-
-      <label>Tolerancia Salida</label>
-      <input type="number" id="editScheduleTolSal">
-
-      <div class="modal-actions">
-        <button id="btnSaveEditedSchedule" class="btn primary">Guardar cambios</button>
-        <button class="btn secondary" onclick="closeModal('editScheduleModal')">Cancelar</button>
-      </div>
-
-    </div>
+    <!-- ... contenido del modal ... -->
   </div>
 
-  <!-- ========================= -->
-<!-- MODAL ASIGNAR HORARIO -->
-<!-- ========================= -->
-   <div id="assignScheduleModal" class="modal" style="display:none;">
-    <div class="modal-content">
+  <div id="assignScheduleModal" class="modal" style="display:none;">
+    <!-- ... contenido del modal ... -->
+  </div>
+
+    <!-- SOLO CONFIGURACIÓN BÁSICA EN HTML -->
+  <script>
+  
     
-     <h3>Asignar horario a empleado</h3>
-
-     <input type="hidden" id="assignScheduleId">
-
-     <label>Seleccione empleado</label>
-     <select id="assignUserSelect"></select>
-
-     <label>Fecha de inicio</label>
-     <input type="date" id="assignStartDate">
-
-     <label>Fecha fin (opcional)</label>
-     <input type="date" id="assignEndDate">
-
-    <div class="modal-actions">
-      <button id="btnAssignSchedule" class="btn primary">Asignar</button>
-      <button class="btn secondary" onclick="closeModal('assignScheduleModal')">Cancelar</button>
-    </div>
-
-    </div>
-   </div>
-
- <!-- ========================= -->
-<!-- SECCIÓN ASISTENCIAS -->
-<!-- ========================= -->
-<section id="section-attendance" class="pane" style="display:none;">
-    <h2>Historial de Asistencias</h2>
-
-    <div class="filters">
-        <label>Empleado:</label>
-        <select id="attendanceUserSelect">
-            <option value="">Seleccione un empleado</option>
-        </select>
-
-        <button id="btnLoadUserAttendance" class="btn primary">
-            Ver asistencias
-        </button>
-    </div>
-
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Tipo</th>
-                <th>Fecha / Hora</th>
-                <th>Estado</th>
-                <th>Minutos Diff</th>
-                <th>Sensor</th>
-                <th>RFID</th>
-                <th>Razón</th>
-            </tr>
-        </thead>
-        <tbody id="attendanceTableBody"></tbody>
-    </table>
-</section>
-
-
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar navegación ESP32
+        const navEsp32 = document.getElementById('nav-esp32-control');
+        if (navEsp32) {
+            navEsp32.addEventListener('click', function() {
+                // showSection está definida en dashboard_admin.js
+                if (typeof showSection === 'function') {
+                    showSection('section-esp32-control');
+                }
+                // updateESP32Status está definida en dashboard_admin.js  
+                if (typeof updateESP32Status === 'function') {
+                    updateESP32Status();
+                }
+            });
+        }
+        
+        // Configurar IP inicial
+        const savedIP = localStorage.getItem('esp32_ip');
+        if (savedIP) {
+            document.getElementById('current-ip').textContent = savedIP;
+        }
+    });
+  </script>
 
   <script src="../js/dashboard_admin.js"></script>
-
 </body>
 </html>
