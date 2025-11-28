@@ -38,12 +38,14 @@
                 return;
             }
 
-            // Guardar token e info del usuario
-            localStorage.setItem("token", data.access_token);
-            localStorage.setItem("user", JSON.stringify(data.user));
+            console.log("Respuesta del login:", data); // Para debug
+
+            // **CORRECCIÓN: Guardar token con la clave correcta**
+            localStorage.setItem("jwtToken", data.access_token || data.token);
+            localStorage.setItem("user", JSON.stringify(data.user || data));
 
             // Redirigir según rol
-            if (data.user.role === "admin") {
+            if ((data.user && data.user.role === "admin") || data.role === "admin") {
                 window.location.href = "../pages/dashboard_admin.html";
             } else {
                 window.location.href = "../pages/dashboard_employee.html";
