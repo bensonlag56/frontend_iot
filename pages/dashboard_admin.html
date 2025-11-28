@@ -295,17 +295,129 @@
     </main>
   </div>
 
-  <!-- MODALES (mantener igual) -->
+  <!-- ========================= -->
+  <!-- MODAL CREAR HORARIO -->
+  <!-- ========================= -->
   <div id="createScheduleModal" class="modal" style="display:none;">
-    <!-- ... contenido del modal ... -->
+    <div class="modal-content">
+
+      <h3>Crear Horario</h3>
+
+      <label>Nombre</label>
+      <input id="schName" type="text">
+
+      <label>Días</label>
+      <div class="days-grid">
+        <label><input type="checkbox" class="sch-day" value="Lun"> Lun</label>
+        <label><input type="checkbox" class="sch-day" value="Mar"> Mar</label>
+        <label><input type="checkbox" class="sch-day" value="Mie"> Mie</label>
+        <label><input type="checkbox" class="sch-day" value="Jue"> Jue</label>
+        <label><input type="checkbox" class="sch-day" value="Vie"> Vie</label>
+        <label><input type="checkbox" class="sch-day" value="Sab"> Sab</label>
+        <label><input type="checkbox" class="sch-day" value="Dom"> Dom</label>
+      </div>
+
+      <label>Tipo</label>
+      <select id="schTipo">
+        <option value="fijo">Fijo</option>
+        <option value="rotativo">Rotativo</option>
+      </select>
+
+      <label>Hora Entrada</label>
+      <input type="time" id="schEntrada">
+
+      <label>Tolerancia Entrada (min)</label>
+      <input type="number" id="schTolEnt" value="0">
+
+      <label>Hora Salida</label>
+      <input type="time" id="schSalida">
+
+      <label>Tolerancia Salida (min)</label>
+      <input type="number" id="schTolSal" value="0">
+
+      <div class="modal-actions">
+        <button id="btnSaveSchedule" class="btn primary">Guardar</button>
+        <button class="btn secondary" onclick="closeModal('createScheduleModal')">Cancelar</button>
+      </div>
+
+    </div>
   </div>
 
+  <!-- ============= -->
+  <!-- MODAL EDITAR HORARIO -->
+  <!-- ============= -->
   <div id="editScheduleModal" class="modal" style="display:none;">
-    <!-- ... contenido del modal ... -->
+    <div class="modal-content">
+
+      <h3>Modificar Horario</h3>
+
+      <input type="hidden" id="editScheduleId">
+
+      <label>Nombre</label>
+      <input id="editScheduleName" type="text">
+
+      <label>Días</label>
+      <div class="days-grid">
+        <label><input type="checkbox" class="edit-sch-day" value="Lun"> Lun</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Mar"> Mar</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Mie"> Mie</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Jue"> Jue</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Vie"> Vie</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Sab"> Sab</label>
+        <label><input type="checkbox" class="edit-sch-day" value="Dom"> Dom</label>
+      </div>
+
+      <label>Tipo</label>
+      <select id="editScheduleTipo">
+        <option value="fijo">Fijo</option>
+        <option value="rotativo">Rotativo</option>
+      </select>
+
+      <label>Hora Entrada</label>
+      <input type="time" id="editScheduleEntrada">
+
+      <label>Tolerancia Entrada</label>
+      <input type="number" id="editScheduleTolEnt">
+
+      <label>Hora Salida</label>
+      <input type="time" id="editScheduleSalida">
+
+      <label>Tolerancia Salida</label>
+      <input type="number" id="editScheduleTolSal">
+
+      <div class="modal-actions">
+        <button id="btnSaveEditedSchedule" class="btn primary">Guardar cambios</button>
+        <button class="btn secondary" onclick="closeModal('editScheduleModal')">Cancelar</button>
+      </div>
+
+    </div>
   </div>
 
+  <!-- ========================= -->
+  <!-- MODAL ASIGNAR HORARIO -->
+  <!-- ========================= -->
   <div id="assignScheduleModal" class="modal" style="display:none;">
-    <!-- ... contenido del modal ... -->
+    <div class="modal-content">
+    
+      <h3>Asignar horario a empleado</h3>
+
+      <input type="hidden" id="assignScheduleId">
+
+      <label>Seleccione empleado</label>
+      <select id="assignUserSelect"></select>
+
+      <label>Fecha de inicio</label>
+      <input type="date" id="assignStartDate">
+
+      <label>Fecha fin (opcional)</label>
+      <input type="date" id="assignEndDate">
+
+      <div class="modal-actions">
+        <button id="btnAssignSchedule" class="btn primary">Asignar</button>
+        <button class="btn secondary" onclick="closeModal('assignScheduleModal')">Cancelar</button>
+      </div>
+
+    </div>
   </div>
 
     <!-- SOLO CONFIGURACIÓN BÁSICA EN HTML -->
