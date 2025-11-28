@@ -224,7 +224,7 @@ function configureESP32IP() {
             alert(' IP configurada correctamente: ' + newIP);
             updateESP32Status();
         } else {
-            alert(' Formato de IP inválido. Ejemplo: 192.168.1.107');
+            alert(' Formato de IP inválido. Ejemplo: http://172.20.10.13');
         }
     }
 }
