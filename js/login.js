@@ -40,8 +40,15 @@
 
             console.log("Respuesta del login:", data); // Para debug
 
-            // **CORRECCIÓN: Guardar token con la clave correcta**
-            localStorage.setItem("jwtToken", data.access_token || data.token);
+            const token = data.access_token || data.access || data.token || data.jwt;
+
+if (!token) {
+    console.error("⚠️ No se encontró token en la respuesta:", data);
+    alert("Error: el servidor no devolvió un token válido");
+    return;
+}
+
+localStorage.setItem("jwtToken", token);
             localStorage.setItem("user", JSON.stringify(data.user || data));
 
             // Redirigir según rol
