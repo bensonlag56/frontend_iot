@@ -95,6 +95,7 @@ function initializeNavigation() {
 }
 
 // NUEVAS FUNCIONES PARA EL REGISTRO DEL ADMINISTRADOR
+// NUEVAS FUNCIONES PARA EL REGISTRO DEL ADMINISTRADOR
 async function loadAdminInfo() {
     try {
         const token = localStorage.getItem("jwtToken");
@@ -106,20 +107,48 @@ async function loadAdminInfo() {
             return;
         }
 
-        // Decodificar el token para obtener el user_id
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const adminId = payload.user_id;
+        // Decodificar el token para obtener el user_id - CORREGIDO
+        const payload = decodeJWT(token);
+        console.log("Token payload:", payload); // Para debugging
+        
+        // Diferentes formas en que el user_id podría estar en el token
+        const adminId = payload.user_id || payload.sub || payload.id || payload.userId;
+        
+        if (!adminId) {
+            console.error("No se pudo obtener adminId del token:", payload);
+            Toast.fire({
+                icon: 'error',
+                title: 'Error: No se pudo identificar al administrador'
+            });
+            return;
+        }
 
+        console.log("Buscando información del admin ID:", adminId);
+        
         // Obtener información del administrador actual
         const res = await fetch(`${BASE_URL}/users/${adminId}`, {
-            headers: { "Authorization": "Bearer " + token }
+            headers: { 
+                "Authorization": "Bearer " + token,
+                "Content-Type": "application/json"
+            }
         });
 
         if (!res.ok) {
-            throw new Error('Error al cargar información del administrador');
+            const errorText = await res.text();
+            console.error("Error en respuesta del servidor:", res.status, errorText);
+            
+            // Si es error 404, probar con otro endpoint
+            if (res.status === 404) {
+                console.log("Probando endpoint alternativo...");
+                await tryAlternativeUserEndpoint(adminId, token);
+                return;
+            }
+            
+            throw new Error(`Error ${res.status}: ${errorText}`);
         }
 
         const adminData = await res.json();
+        console.log("Datos del admin recibidos:", adminData);
         
         // Actualizar la UI con la información del admin
         document.getElementById('admin-name').textContent = 
@@ -179,11 +208,87 @@ async function loadAdminInfo() {
         console.error("Error cargando info admin:", err);
         Toast.fire({
             icon: 'error',
-            title: 'Error al cargar información'
+            title: 'Error al cargar información: ' + err.message
         });
     }
 }
 
+// Función helper para decodificar JWT
+function decodeJWT(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        return JSON.parse(jsonPayload);
+    } catch (error) {
+        console.error("Error decodificando JWT:", error);
+        return {};
+    }
+}
+
+// Función alternativa si el endpoint /users/{id} falla
+async function tryAlternativeUserEndpoint(userId, token) {
+    try {
+        // Intentar obtener todos los usuarios y filtrar
+        const res = await fetch(`${BASE_URL}/users/?page=1&per_page=50`, {
+            headers: { 
+                "Authorization": "Bearer " + token,
+                "Content-Type": "application/json"
+            }
+        });
+        
+        if (res.ok) {
+            const data = await res.json();
+            const currentUser = data.users.find(u => u.id == userId);
+            
+            if (currentUser) {
+                // Actualizar UI con los datos obtenidos
+                document.getElementById('admin-name').textContent = 
+                    `${currentUser.nombre} ${currentUser.apellido}`;
+                document.getElementById('admin-username').textContent = currentUser.username;
+                
+                const huellaElement = document.getElementById('admin-huella');
+                const rfidElement = document.getElementById('admin-rfid');
+                
+                if (currentUser.huella_id) {
+                    huellaElement.textContent = currentUser.huella_id;
+                    huellaElement.style.color = 'green';
+                    huellaElement.style.fontWeight = 'bold';
+                } else {
+                    huellaElement.textContent = "No asignado";
+                    huellaElement.style.color = 'red';
+                }
+                
+                if (currentUser.rfid) {
+                    rfidElement.textContent = currentUser.rfid;
+                    rfidElement.style.color = 'green';
+                    rfidElement.style.fontWeight = 'bold';
+                } else {
+                    rfidElement.textContent = "No asignado";
+                    rfidElement.style.color = 'red';
+                }
+                
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Información cargada (modo alternativo)'
+                });
+                return;
+            }
+        }
+        
+        throw new Error('No se pudo cargar la información del usuario');
+        
+    } catch (error) {
+        console.error("Error en endpoint alternativo:", error);
+        Toast.fire({
+            icon: 'error',
+            title: 'No se pudo cargar la información del administrador'
+        });
+    }
+}
 async function registerAdminFingerprint() {
     try {
         const token = localStorage.getItem("jwtToken");
@@ -793,7 +898,6 @@ function configureESP32IP() {
     }
 }
 
-// En lugar de usar XMLHttpRequest inseguro, usa fetch con manejo de errores
 async function checkESP32Status() {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) return { status: 'offline', error: 'IP no configurada' };
