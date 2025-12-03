@@ -209,7 +209,7 @@ async function loadEmployees() {
     }
 }
 function configureESP32IP() {
-    const currentIP = localStorage.getItem('esp32_ip') || '10.139.102.152';
+    const currentIP = localStorage.getItem('esp32_ip') || '192.168.1.108';
     const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
 
     if (newIP) {
@@ -225,7 +225,7 @@ function configureESP32IP() {
         } else {
             Toast.fire({
                 icon: 'error',
-                title: 'Formato de IP inválido. Ejemplo: 10.139.102.152'
+                title: 'Formato de IP inválido. Ejemplo: 192.168.1.108'
             });
         }
     }
