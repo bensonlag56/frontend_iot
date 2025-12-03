@@ -5,6 +5,19 @@
   const API_BASE = 'https://asistencia-iot-api.onrender.com';
   let currentUser = null;
 
+  // Configuración de Toast (SweetAlert2)
+  const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+      toast.addEventListener('mouseenter', Swal.stopTimer)
+      toast.addEventListener('mouseleave', Swal.resumeTimer)
+    }
+  });
+
   // Mostrar/ocultar secciones
   function showSection(id) {
     const sections = document.querySelectorAll('.pane');
@@ -16,17 +29,17 @@
   // Convertir UTC a hora de Lima (UTC-5)
   function convertUTCToLima(utcDateString) {
     if (!utcDateString) return null;
-    
+
     try {
       const utcDate = new Date(utcDateString);
-      
+
       // Lima está en UTC-5
       const limaOffset = -5 * 60; // UTC-5 en minutos
       const localOffset = utcDate.getTimezoneOffset(); // Offset local del navegador
-      
+
       // Ajustar la fecha a hora de Lima
       const limaTime = new Date(utcDate.getTime() + (localOffset * 60 * 1000) + (limaOffset * 60 * 1000));
-      
+
       return limaTime;
     } catch (error) {
       console.error('Error convirtiendo fecha:', error);
@@ -49,8 +62,8 @@
     if (!dateString) return '—';
     const date = convertUTCToLima(dateString);
     if (!date) return '—';
-    return date.toLocaleTimeString('es-ES', { 
-      hour: '2-digit', 
+    return date.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
       minute: '2-digit',
       timeZone: 'America/Lima'
     });
@@ -65,18 +78,18 @@
   function checkAuth() {
     const token = getToken();
     const user = localStorage.getItem('user');
-    
-    console.log('Verificando autenticación:', { 
+
+    console.log('Verificando autenticación:', {
       token: token ? 'Presente' : 'Falta',
       user: user ? 'Presente' : 'Falta'
     });
-    
+
     if (!token || !user) {
       console.log('No autenticado, redirigiendo a login');
       window.location.href = '../pages/login.html';
       return false;
     }
-    
+
     try {
       currentUser = JSON.parse(user);
       updateUserInfo();
@@ -91,20 +104,20 @@
   // Actualizar información del usuario en la UI
   function updateUserInfo() {
     if (!currentUser) return;
-    
+
     const userNameEl = document.getElementById('userName');
     const userAvatarEl = document.getElementById('userAvatar');
     const userRoleEl = document.getElementById('userRole');
-    
+
     if (userNameEl && currentUser.nombre) {
       userNameEl.textContent = `${currentUser.nombre} ${currentUser.apellido || ''}`.trim();
     }
-    
+
     if (userAvatarEl && currentUser.nombre) {
       const initials = (currentUser.nombre.charAt(0) + (currentUser.apellido ? currentUser.apellido.charAt(0) : '')).toUpperCase();
       userAvatarEl.textContent = initials;
     }
-    
+
     if (userRoleEl) {
       userRoleEl.textContent = currentUser.role === 'admin' ? 'Administrador' : 'Empleado';
     }
@@ -174,21 +187,21 @@
       // Intentar diferentes endpoints posibles
       let attendances = [];
       let url = '/attendance/history';
-      
+
       const params = new URLSearchParams();
       params.append('per_page', '50');
-      
+
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
-      
+
       if (params.toString()) {
         url += `?${params.toString()}`;
       }
 
       console.log('Cargando asistencias desde:', url);
-      
+
       const data = await fetchWithAuth(url);
-      
+
       // Manejar diferentes estructuras de respuesta
       if (Array.isArray(data)) {
         attendances = data;
@@ -202,7 +215,7 @@
         console.warn('Estructura de datos inesperada:', data);
         attendances = [];
       }
-      
+
       loadingEl.style.display = 'none';
 
       if (attendances.length === 0) {
@@ -215,10 +228,10 @@
       // Renderizar tabla
       attendances.forEach(attendance => {
         const tr = document.createElement('tr');
-        
+
         const entryDate = attendance.entry_time ? convertUTCToLima(attendance.entry_time) : null;
         const exitDate = attendance.exit_time ? convertUTCToLima(attendance.exit_time) : null;
-        
+
         // Calcular duración si hay entrada y salida
         let duracion = '—';
         if (entryDate && exitDate) {
@@ -227,22 +240,22 @@
           const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
           duracion = `${hours}h ${minutes}m`;
         }
-        
+
         // Determinar estado
         const estado = attendance.estado_entrada || attendance.status || '—';
-        
+
         tr.innerHTML = `
           <td>${entryDate ? entryDate.toLocaleDateString('es-ES', { timeZone: 'America/Lima' }) : '—'}</td>
-          <td>${entryDate ? entryDate.toLocaleTimeString('es-ES', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            timeZone: 'America/Lima'
-          }) : '—'}</td>
-          <td>${exitDate ? exitDate.toLocaleTimeString('es-ES', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            timeZone: 'America/Lima'
-          }) : '—'}</td>
+          <td>${entryDate ? entryDate.toLocaleTimeString('es-ES', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'America/Lima'
+        }) : '—'}</td>
+          <td>${exitDate ? exitDate.toLocaleTimeString('es-ES', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'America/Lima'
+        }) : '—'}</td>
           <td>
             <span class="status-badge ${getStatusClass(estado)}">
               ${getStatusText(estado)}
@@ -256,7 +269,7 @@
     } catch (error) {
       loadingEl.style.display = 'none';
       console.error('Error cargando asistencias:', error);
-      
+
       // Mostrar mensaje de error en la tabla
       noDataEl.innerHTML = `
         <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
@@ -275,7 +288,7 @@
   // Clase CSS para estados
   function getStatusClass(status) {
     if (!status) return 'status-default';
-    
+
     const statusMap = {
       'presente': 'status-present',
       'a_tiempo': 'status-present',
@@ -293,7 +306,7 @@
   // Texto para estados
   function getStatusText(status) {
     if (!status) return '—';
-    
+
     const textMap = {
       'presente': 'A tiempo',
       'a_tiempo': 'A tiempo',
@@ -327,7 +340,7 @@
     try {
       // Intentar diferentes endpoints posibles
       let schedules = [];
-      
+
       try {
         const data = await fetchWithAuth('/schedules/my');
         schedules = Array.isArray(data) ? data : (data.items || data.data || []);
@@ -342,7 +355,7 @@
           throw new Error('No se pudo cargar el horario');
         }
       }
-      
+
       loadingEl.style.display = 'none';
 
       if (!schedules || schedules.length === 0) {
@@ -352,7 +365,7 @@
 
       // Tomar el primer horario (podrías filtrar por fecha actual)
       const currentSchedule = schedules[0];
-      
+
       // Formatear los días para mejor visualización
       let diasFormateados = 'No especificado';
       if (currentSchedule.dias) {
@@ -436,7 +449,7 @@
       loadingEl.style.display = 'none';
       noDataEl.style.display = 'block';
       console.error('Error cargando horario:', error);
-      
+
       noDataEl.innerHTML = `
         <i class="fas fa-exclamation-circle" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
         <p>Error al cargar el horario</p>
@@ -475,7 +488,10 @@
       const endDate = endDateInput.value;
 
       if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-        alert('La fecha inicial no puede ser mayor que la fecha final');
+        Toast.fire({
+          icon: 'warning',
+          title: 'La fecha inicial no puede ser mayor que la fecha final'
+        });
         return;
       }
 
@@ -490,7 +506,7 @@
 
       startDateInput.value = startDate.toISOString().split('T')[0];
       endDateInput.value = endDate.toISOString().split('T')[0];
-      
+
       loadAttendances(startDateInput.value, endDateInput.value);
     });
   }
@@ -531,13 +547,13 @@
   function updateLimaTime() {
     try {
       const now = new Date();
-      const limaTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Lima"}));
-      
+      const limaTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Lima" }));
+
       // Actualizar en el header si existe el elemento
       const limaTimeElement = document.getElementById('limaTime');
       if (limaTimeElement) {
-        limaTimeElement.textContent = `Hora Lima: ${limaTime.toLocaleTimeString('es-ES', { 
-          hour: '2-digit', 
+        limaTimeElement.textContent = `Hora Lima: ${limaTime.toLocaleTimeString('es-ES', {
+          hour: '2-digit',
           minute: '2-digit',
           second: '2-digit'
         })}`;
@@ -550,7 +566,7 @@
   // Inicializar
   async function init() {
     console.log('Inicializando dashboard empleado...');
-    
+
     if (!checkAuth()) {
       console.log('Usuario no autenticado');
       return;
@@ -559,20 +575,23 @@
     try {
       wireEvents();
       setupFilters();
-      
+
       // Actualizar hora de Lima cada segundo
       setInterval(updateLimaTime, 1000);
       updateLimaTime();
-      
+
       // Cargar sección por defecto
       showSection('section-my-attendances');
       await loadAttendances();
-      
+
       console.log('Dashboard inicializado correctamente');
-      
+
     } catch (error) {
       console.error('Error inicializando dashboard:', error);
-      alert('Error al inicializar el dashboard: ' + error.message);
+      Toast.fire({
+        icon: 'error',
+        title: 'Error al inicializar el dashboard: ' + error.message
+      });
     }
   }
 

@@ -1,228 +1,241 @@
  #section-admin-attendances {
-            padding: 25px;
-            background: #f7f9fc;
-            border-radius: 12px;
-        }
+     padding: 25px;
+     background: #f7f9fc;
+     border-radius: 12px;
+ }
 
-        #section-admin-attendances h2 {
-            margin-bottom: 20px;
-            font-size: 1.8rem;
-            color: #333;
-            font-weight: 700;
-        }
+ #section-admin-attendances h2 {
+     margin-bottom: 20px;
+     font-size: 1.8rem;
+     color: #333;
+     font-weight: 700;
+ }
 
-        .filters {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-            align-items: end;
-        }
+ .filters {
+     display: grid;
+     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+     gap: 15px;
+     margin-bottom: 20px;
+     align-items: end;
+ }
 
-        .filters label {
-            font-weight: 600;
-            color: #444;
-            margin-bottom: 5px;
-            display: block;
-        }
+ .filters label {
+     font-weight: 600;
+     color: #444;
+     margin-bottom: 5px;
+     display: block;
+ }
 
-        .filters input,
-        .filters select {
-            width: 100%;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            font-size: 0.95rem;
-        }
+ .filters input,
+ .filters select {
+     width: 100%;
+     padding: 10px;
+     border-radius: 8px;
+     border: 1px solid #ccc;
+     font-size: 0.95rem;
+ }
 
-        #btnLoadAttendance {
-            padding: 12px 18px;
-            background: #0066ff;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: 0.2s ease;
-        }
+ #btnLoadAttendance {
+     padding: 12px 18px;
+     background: #0066ff;
+     color: white;
+     border: none;
+     border-radius: 8px;
+     cursor: pointer;
+     font-weight: 600;
+     transition: 0.2s ease;
+ }
 
-        #btnLoadAttendance:hover {
-            background: #004fcc;
-        }
+ #btnLoadAttendance:hover {
+     background: #004fcc;
+ }
 
-        table.table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
+ table.table {
+     width: 100%;
+     border-collapse: collapse;
+     background: white;
+     border-radius: 10px;
+     overflow: hidden;
+     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+ }
 
-        table.table th {
-            background: #0066ff;
-            color: white;
-            padding: 12px 10px;
-            text-align: left;
-            font-weight: 600;
-        }
+ table.table th {
+     background: #0066ff;
+     color: white;
+     padding: 12px 10px;
+     text-align: left;
+     font-weight: 600;
+ }
 
-        table.table td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #eee;
-            font-size: 0.95rem;
-        }
+ table.table td {
+     padding: 12px 10px;
+     border-bottom: 1px solid #eee;
+     font-size: 0.95rem;
+ }
 
-        table.table tr:hover td {
-            background: #f0f6ff;
-        }
-        .modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.35);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(6px);
-    z-index: 999;
-    animation: fadeIn .25s ease;
-}
+ table.table tr:hover td {
+     background: #f0f6ff;
+ }
 
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
+ .modal {
+     position: fixed;
+     inset: 0;
+     background: rgba(0, 0, 0, 0.35);
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     backdrop-filter: blur(6px);
+     z-index: 999;
+     animation: fadeIn .25s ease;
+ }
 
-/* ===== CARD DEL MODAL ===== */
-.modal-content {
-    width: 430px;
-    max-width: 92%;
-    background: #ffffff;
-    padding: 28px;
-    border-radius: 18px;
-    box-shadow: 0 12px 35px rgba(0,0,0,.12);
-    border: 1px solid rgba(230,230,230,0.7);
-    animation: pop .25s ease;
-}
+ @keyframes fadeIn {
+     from {
+         opacity: 0;
+     }
 
-@keyframes pop {
-    from { transform: scale(.94) translateY(10px); opacity: 0; }
-    to   { transform: scale(1) translateY(0); opacity: 1; }
-}
+     to {
+         opacity: 1;
+     }
+ }
 
-/* ===== TITULO ===== */
-.modal-content h3 {
-    font-size: 1.45rem;
-    font-weight: 700;
-    color: #111;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+ /* ===== CARD DEL MODAL ===== */
+ .modal-content {
+     width: 430px;
+     max-width: 92%;
+     background: #ffffff;
+     padding: 28px;
+     border-radius: 18px;
+     box-shadow: 0 12px 35px rgba(0, 0, 0, .12);
+     border: 1px solid rgba(230, 230, 230, 0.7);
+     animation: pop .25s ease;
+ }
 
-.modal-content h3::before {
-    content: "🕒";
-    font-size: 1.3rem;
-}
+ @keyframes pop {
+     from {
+         transform: scale(.94) translateY(10px);
+         opacity: 0;
+     }
 
-/* ===== INPUTS ===== */
-.modal-content input,
-.modal-content select {
-    width: 100%;
-    padding: 11px 13px;
-    margin-bottom: 15px;
-    border-radius: 10px;
-    background: #fafafa;
-    border: 1px solid #ddd;
-    transition: .2s ease;
-    font-size: 0.95rem;
-}
+     to {
+         transform: scale(1) translateY(0);
+         opacity: 1;
+     }
+ }
 
-.modal-content input:focus,
-.modal-content select:focus {
-    border-color: #6b8bff;
-    background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(100,140,255,0.2);
-    outline: none;
-}
+ /* ===== TITULO ===== */
+ .modal-content h3 {
+     font-size: 1.45rem;
+     font-weight: 700;
+     color: #111;
+     margin-bottom: 20px;
+     display: flex;
+     align-items: center;
+     gap: 8px;
+ }
 
-/* ===== LABEL ===== */
-.modal-content label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 6px;
-    display: block;
-}
+ .modal-content h3::before {
+     content: "";
+     font-size: 1.3rem;
+ }
 
-/* ===== GRID DE DÍAS ===== */
-.days-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 20px;
-}
+ /* ===== INPUTS ===== */
+ .modal-content input,
+ .modal-content select {
+     width: 100%;
+     padding: 11px 13px;
+     margin-bottom: 15px;
+     border-radius: 10px;
+     background: #fafafa;
+     border: 1px solid #ddd;
+     transition: .2s ease;
+     font-size: 0.95rem;
+ }
 
-.days-grid label {
-    border: 1px solid #ddd;
-    background: #f7f7f7;
-    padding: 8px 0;
-    text-align: center;
-    border-radius: 10px;
-    font-size: .9rem;
-    cursor: pointer;
-    transition: .2s;
-    user-select: none;
-}
+ .modal-content input:focus,
+ .modal-content select:focus {
+     border-color: #6b8bff;
+     background: #ffffff;
+     box-shadow: 0 0 0 3px rgba(100, 140, 255, 0.2);
+     outline: none;
+ }
 
-.days-grid input {
-    display: none;
-}
+ /* ===== LABEL ===== */
+ .modal-content label {
+     font-size: 0.9rem;
+     font-weight: 600;
+     color: #333;
+     margin-bottom: 6px;
+     display: block;
+ }
 
-.days-grid label:hover {
-    background: #eef2ff;
-    border-color: #6b8bff;
-}
+ /* ===== GRID DE DÍAS ===== */
+ .days-grid {
+     display: grid;
+     grid-template-columns: repeat(4, 1fr);
+     gap: 10px;
+     margin-bottom: 20px;
+ }
 
-/* ===== Estilo cuando está seleccionado ===== */
-.days-grid input:checked + label {
-    background: #6b8bff;
-    color: white;
-    border-color: #5a78e6;
-    font-weight: 600;
-}
+ .days-grid label {
+     border: 1px solid #ddd;
+     background: #f7f7f7;
+     padding: 8px 0;
+     text-align: center;
+     border-radius: 10px;
+     font-size: .9rem;
+     cursor: pointer;
+     transition: .2s;
+     user-select: none;
+ }
 
-/* ===== BOTONES ===== */
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 5px;
-    gap: 10px;
-}
+ .days-grid input {
+     display: none;
+ }
 
-.btn {
-    padding: 11px 20px;
-    border-radius: 12px;
-    font-weight: 600;
-    border: none;
-    cursor: pointer;
-    transition: .2s ease;
-}
+ .days-grid label:hover {
+     background: #eef2ff;
+     border-color: #6b8bff;
+ }
 
-.btn.primary {
-    background: #6b8bff;
-    color: white;
-}
+ /* ===== Estilo cuando está seleccionado ===== */
+ .days-grid input:checked+label {
+     background: #6b8bff;
+     color: white;
+     border-color: #5a78e6;
+     font-weight: 600;
+ }
 
-.btn.primary:hover {
-    background: #5a78e6;
-}
+ /* ===== BOTONES ===== */
+ .modal-actions {
+     display: flex;
+     justify-content: flex-end;
+     margin-top: 5px;
+     gap: 10px;
+ }
 
-.btn.secondary {
-    background: #f0f0f0;
-}
+ .btn {
+     padding: 11px 20px;
+     border-radius: 12px;
+     font-weight: 600;
+     border: none;
+     cursor: pointer;
+     transition: .2s ease;
+ }
 
-.btn.secondary:hover {
-    background: #e2e2e2;
-}
+ .btn.primary {
+     background: #6b8bff;
+     color: white;
+ }
+
+ .btn.primary:hover {
+     background: #5a78e6;
+ }
+
+ .btn.secondary {
+     background: #f0f0f0;
+ }
+
+ .btn.secondary:hover {
+     background: #e2e2e2;
+ }

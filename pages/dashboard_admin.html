@@ -1,11 +1,12 @@
 <!doctype html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dashboard Admin - Sistema de Asistencias</title>
   <link rel="stylesheet" href="../css/dashboard.css" />
-  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="../css/style.css" />
   <style>
     /* Estilos adicionales para el control ESP32 */
     .esp32-controls {
@@ -101,6 +102,7 @@
     }
   </style>
 </head>
+
 <body>
 
   <script src="../js/authGuard.js"></script>
@@ -177,8 +179,15 @@
         <table class="table">
           <thead>
             <tr>
-              <th>ID</th><th>Username</th><th>Nombre</th><th>Apellido</th>
-              <th>Rol</th><th>Área</th><th>Huella ID</th><th>RFID</th><th>Acción</th>
+              <th>ID</th>
+              <th>Username</th>
+              <th>Nombre</th>
+              <th>Apellido</th>
+              <th>Rol</th>
+              <th>Área</th>
+              <th>Huella ID</th>
+              <th>RFID</th>
+              <th>Acción</th>
             </tr>
           </thead>
           <tbody id="employeesTableBody"></tbody>
@@ -205,40 +214,40 @@
         <h2>Reporte de Asistencias (Admin)</h2>
 
         <div class="filters" style="margin-bottom: 15px; display:flex; gap:10px; flex-wrap:wrap;">
-            <div>
-                <label>Empleado:</label>
-                <select id="attendanceUserSelect" class="form-control">
-                    <option value="">Todos</option>
-                </select>
-            </div>
-            <div>
-                <label>Desde:</label>
-                <input type="date" id="attendanceStart" class="form-control">
-            </div>
-            <div>
-                <label>Hasta:</label>
-                <input type="date" id="attendanceEnd" class="form-control">
-            </div>
-            <div>
-                <label>Área:</label>
-                <input type="text" id="attendanceArea" placeholder="Ej: Cocina" class="form-control">
-            </div>
-            
-            <button id="btnLoadAttendance" class="btn primary">Buscar</button>
+          <div>
+            <label>Empleado:</label>
+            <select id="attendanceUserSelect" class="form-control">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div>
+            <label>Desde:</label>
+            <input type="date" id="attendanceStart" class="form-control">
+          </div>
+          <div>
+            <label>Hasta:</label>
+            <input type="date" id="attendanceEnd" class="form-control">
+          </div>
+          <div>
+            <label>Área:</label>
+            <input type="text" id="attendanceArea" placeholder="Ej: Cocina" class="form-control">
+          </div>
+
+          <button id="btnLoadAttendance" class="btn primary">Buscar</button>
         </div>
 
         <table class="table">
-            <thead>
-                <tr>
-                    <th>Empleado</th>
-                    <th>Área</th>
-                    <th>Entrada</th>
-                    <th>Salida</th>
-                    <th>Duración</th>
-                    <th>Estado</th>
-                </tr>
-            </thead>
-            <tbody id="attendanceTableBody"></tbody>
+          <thead>
+            <tr>
+              <th>Empleado</th>
+              <th>Área</th>
+              <th>Entrada</th>
+              <th>Salida</th>
+              <th>Duración</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceTableBody"></tbody>
         </table>
       </section>
 
@@ -250,25 +259,25 @@
 
         <div class="esp32-controls">
           <h3>Estado del Sistema</h3>
-          
+
           <div id="esp32-status" class="status-box status-offline">
-             ESP32 DESCONECTADO - Configure la IP primero
+            ESP32 DESCONECTADO - Configure la IP primero
           </div>
-          
+
           <div class="control-buttons">
             <button onclick="configureESP32IP()" class="btn-config">
-               Configurar IP ESP32
+              Configurar IP ESP32
             </button>
-            
+
             <button onclick="updateESP32Status()" class="btn-refresh">
-               Actualizar Estado
+              Actualizar Estado
             </button>
 
             <button onclick="testESP32Connection()" class="btn primary">
-               Probar Conexión
+              Probar Conexión
             </button>
           </div>
-          
+
           <div class="ip-info">
             IP Actual: <span id="current-ip">No configurada</span>
           </div>
@@ -398,7 +407,7 @@
   <!-- ========================= -->
   <div id="assignScheduleModal" class="modal" style="display:none;">
     <div class="modal-content">
-    
+
       <h3>Asignar horario a empleado</h3>
 
       <input type="hidden" id="assignScheduleId">
@@ -420,34 +429,36 @@
     </div>
   </div>
 
-    <!-- SOLO CONFIGURACIÓN BÁSICA EN HTML -->
+  <!-- SOLO CONFIGURACIÓN BÁSICA EN HTML -->
   <script>
-  
-    
-    document.addEventListener('DOMContentLoaded', function() {
-        // Inicializar navegación ESP32
-        const navEsp32 = document.getElementById('nav-esp32-control');
-        if (navEsp32) {
-            navEsp32.addEventListener('click', function() {
-                // showSection está definida en dashboard_admin.js
-                if (typeof showSection === 'function') {
-                    showSection('section-esp32-control');
-                }
-                // updateESP32Status está definida en dashboard_admin.js  
-                if (typeof updateESP32Status === 'function') {
-                    updateESP32Status();
-                }
-            });
-        }
-        
-        // Configurar IP inicial
-        const savedIP = localStorage.getItem('esp32_ip');
-        if (savedIP) {
-            document.getElementById('current-ip').textContent = savedIP;
-        }
+
+
+    document.addEventListener('DOMContentLoaded', function () {
+      // Inicializar navegación ESP32
+      const navEsp32 = document.getElementById('nav-esp32-control');
+      if (navEsp32) {
+        navEsp32.addEventListener('click', function () {
+          // showSection está definida en dashboard_admin.js
+          if (typeof showSection === 'function') {
+            showSection('section-esp32-control');
+          }
+          // updateESP32Status está definida en dashboard_admin.js  
+          if (typeof updateESP32Status === 'function') {
+            updateESP32Status();
+          }
+        });
+      }
+
+      // Configurar IP inicial
+      const savedIP = localStorage.getItem('esp32_ip');
+      if (savedIP) {
+        document.getElementById('current-ip').textContent = savedIP;
+      }
     });
   </script>
 
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="../js/dashboard_admin.js"></script>
 </body>
+
 </html>

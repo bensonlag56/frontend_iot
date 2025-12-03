@@ -1,6 +1,19 @@
 (() => {
     const BASE_URL = "https://asistencia-iot-api.onrender.com";
 
+    // Configuración de Toast (SweetAlert2)
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer)
+            toast.addEventListener('mouseleave', Swal.resumeTimer)
+        }
+    });
+
     const loginForm = document.getElementById("loginForm");
 
     if (!loginForm) {
@@ -20,7 +33,10 @@
         const password = passwordInput.value.trim();
 
         if (!username || !password) {
-            alert("Completa todos los campos");
+            Toast.fire({
+                icon: 'warning',
+                title: 'Completa todos los campos'
+            });
             return;
         }
 
@@ -34,7 +50,10 @@
             const data = await res.json();
 
             if (!res.ok) {
-                alert(data.msg || "Credenciales incorrectas");
+                Toast.fire({
+                    icon: 'error',
+                    title: data.msg || "Credenciales incorrectas"
+                });
                 return;
             }
 
@@ -42,25 +61,38 @@
 
             const token = data.access_token || data.access || data.token || data.jwt;
 
-if (!token) {
-    console.error("⚠️ No se encontró token en la respuesta:", data);
-    alert("Error: el servidor no devolvió un token válido");
-    return;
-}
+            if (!token) {
+                console.error("⚠️ No se encontró token en la respuesta:", data);
+                Toast.fire({
+                    icon: 'error',
+                    title: "Error: el servidor no devolvió un token válido"
+                });
+                return;
+            }
 
-localStorage.setItem("jwtToken", token);
+            localStorage.setItem("jwtToken", token);
             localStorage.setItem("user", JSON.stringify(data.user || data));
 
-            // Redirigir según rol
-            if ((data.user && data.user.role === "admin") || data.role === "admin") {
-                window.location.href = "../pages/dashboard_admin.html";
-            } else {
-                window.location.href = "../pages/dashboard_employee.html";
-            }
+            Toast.fire({
+                icon: 'success',
+                title: 'Inicio de sesión exitoso'
+            });
+
+            setTimeout(() => {
+                // Redirigir según rol
+                if ((data.user && data.user.role === "admin") || data.role === "admin") {
+                    window.location.href = "../pages/dashboard_admin.html";
+                } else {
+                    window.location.href = "../pages/dashboard_employee.html";
+                }
+            }, 1500);
 
         } catch (err) {
             console.error("Error login:", err);
-            alert("No se pudo conectar con el servidor");
+            Toast.fire({
+                icon: 'error',
+                title: "No se pudo conectar con el servidor"
+            });
         }
     });
 })();

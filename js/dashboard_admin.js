@@ -4,6 +4,19 @@
 const BASE_URL = "https://asistencia-iot-api.onrender.com";
 let ESP32_BASE_URL = '10.139.102.152'; // IP por defecto
 
+// Configuración de Toast (SweetAlert2)
+const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer)
+        toast.addEventListener('mouseleave', Swal.resumeTimer)
+    }
+});
+
 /*************************************
  * UTILIDADES
  *************************************/
@@ -22,13 +35,13 @@ function showSection(id) {
     document.querySelectorAll(".pane").forEach(p => {
         p.style.display = "none";
     });
-    
+
     // Mostrar la sección solicitada
     const section = document.getElementById(id);
     if (section) {
         section.style.display = "block";
     }
-    
+
     // Ejecutar acciones específicas de cada sección
     if (id === "section-list-employees") {
         loadEmployees();
@@ -51,7 +64,7 @@ function initializeNavigation() {
     if (navRegister) {
         navRegister.addEventListener("click", () => showSection("section-register-employee"));
     }
-    
+
     // Lista de empleados
     const navList = document.getElementById("nav-list-employees");
     if (navList) {
@@ -60,7 +73,7 @@ function initializeNavigation() {
             loadEmployees();
         });
     }
-    
+
     // Horarios
     const navSchedules = document.getElementById("nav-schedules");
     if (navSchedules) {
@@ -69,15 +82,15 @@ function initializeNavigation() {
             loadSchedules();
         });
     }
-    
+
     // Asistencias
     const navAttendances = document.getElementById("nav-attendances");
     if (navAttendances) {
         navAttendances.addEventListener("click", () => showSection("section-admin-attendances"));
     }
-    
+
     // Control ESP32 (ya configurado en HTML)
-    
+
     // Logout
     const logoutBtn = document.getElementById("logoutBtn");
     if (logoutBtn) {
@@ -109,7 +122,10 @@ async function registerEmployee() {
     const area_trabajo = document.getElementById("emprea").value.trim();
 
     if (!nombre || !apellido || !username || !password) {
-        alert("Complete todos los campos obligatorios");
+        Toast.fire({
+            icon: 'warning',
+            title: 'Complete todos los campos obligatorios'
+        });
         return;
     }
 
@@ -138,11 +154,17 @@ async function registerEmployee() {
 
         const data = await res.json();
         if (!res.ok) {
-            alert(data.msg || "Error al registrar empleado");
+            Toast.fire({
+                icon: 'error',
+                title: data.msg || "Error al registrar empleado"
+            });
             return;
         }
 
-        alert("Empleado registrado correctamente");
+        Toast.fire({
+            icon: 'success',
+            title: 'Empleado registrado correctamente'
+        });
         // Limpiar formulario
         document.getElementById("empName").value = "";
         document.getElementById("empLastName").value = "";
@@ -152,11 +174,14 @@ async function registerEmployee() {
         document.getElementById("empDOB").value = "";
         document.getElementById("empHireDate").value = "";
         document.getElementById("emprea").value = "";
-        
+
         loadEmployees();
 
     } catch (err) {
-        alert("Error en el servidor");
+        Toast.fire({
+            icon: 'error',
+            title: 'Error en el servidor'
+        });
         console.error(err);
     }
 }
@@ -171,14 +196,17 @@ async function loadEmployees() {
         });
 
         if (!res.ok) {
-            alert("No se pudo cargar la lista de usuarios");
+            Toast.fire({
+                icon: 'error',
+                title: 'No se pudo cargar la lista de usuarios'
+            });
             return;
         }
 
         const data = await res.json();
         const tbody = document.getElementById("employeesTableBody");
         if (!tbody) return;
-        
+
         tbody.innerHTML = "";
 
         data.users.forEach(u => {
@@ -203,7 +231,10 @@ async function loadEmployees() {
 
     } catch (err) {
         console.error(err);
-        alert("Error cargando usuarios");
+        Toast.fire({
+            icon: 'error',
+            title: 'Error cargando usuarios'
+        });
     }
 }
 
@@ -215,16 +246,22 @@ async function loadEmployees() {
 function configureESP32IP() {
     const currentIP = localStorage.getItem('esp32_ip') || '10.139.102.152';
     const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
-    
+
     if (newIP) {
         if (newIP.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
             localStorage.setItem('esp32_ip', newIP);
             ESP32_BASE_URL = `http://${newIP}`;
             document.getElementById('current-ip').textContent = newIP;
-            alert(' IP configurada correctamente: ' + newIP);
+            Toast.fire({
+                icon: 'success',
+                title: 'IP configurada correctamente: ' + newIP
+            });
             updateESP32Status();
         } else {
-            alert(' Formato de IP inválido. Ejemplo: 10.139.102.152');
+            Toast.fire({
+                icon: 'error',
+                title: 'Formato de IP inválido. Ejemplo: 10.139.102.152'
+            });
         }
     }
 }
@@ -234,8 +271,8 @@ async function checkESP32Status() {
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
         xhr.timeout = 5000;
-        
-        xhr.onreadystatechange = function() {
+
+        xhr.onreadystatechange = function () {
             if (xhr.readyState === 4) {
                 if (xhr.status === 200) {
                     try {
@@ -245,22 +282,22 @@ async function checkESP32Status() {
                         resolve({ status: 'ready', message: 'Conexión exitosa' });
                     }
                 } else {
-                    resolve({ 
-                        status: 'offline', 
+                    resolve({
+                        status: 'offline',
                         error: xhr.status === 0 ? 'No se pudo conectar' : `Error ${xhr.status}`
                     });
                 }
             }
         };
-        
-        xhr.ontimeout = function() {
+
+        xhr.ontimeout = function () {
             resolve({ status: 'offline', error: 'Timeout - Sin respuesta' });
         };
-        
-        xhr.onerror = function() {
+
+        xhr.onerror = function () {
             resolve({ status: 'offline', error: 'Error de conexión' });
         };
-        
+
         xhr.open('GET', `${ESP32_BASE_URL}/status`, true);
         xhr.send();
     });
@@ -270,51 +307,51 @@ async function checkESP32Status() {
 async function updateESP32Status() {
     const statusElement = document.getElementById('esp32-status');
     const infoElement = document.getElementById('esp32-info');
-    
+
     if (!statusElement) {
         console.log('Elemento esp32-status no encontrado');
         return;
     }
-    
+
     statusElement.textContent = ' Consultando estado...';
     statusElement.className = 'status-box';
-    
+
     try {
         const status = await checkESP32Status();
-        
+
         if (status.status === 'ready') {
-            statusElement.innerHTML = 
+            statusElement.innerHTML =
                 ` ESP32 CONECTADO | IP: ${ESP32_BASE_URL}<br>` +
                 ` WiFi: ${status.ssid || 'Conectado'} (${status.rssi || '?'} dBm)<br>` +
                 ` Huella ID Actual: ${status.huella_id_actual || 'Ninguno'}<br>` +
                 ` Registro Activo: ${status.registro_activo ? 'Sí' : 'No'}`;
             statusElement.className = 'status-box status-online';
-            
+
             if (infoElement) {
                 infoElement.innerHTML = `
-                    <p><strong>Estado del Sistema:</strong> ${status.sistema_listo ? '✅ Listo' : '❌ No listo'}</p>
-                    <p><strong>Sensor de Huella:</strong> ${status.sistema_listo ? '✅ Conectado' : '❌ Desconectado'}</p>
+                    <p><strong>Estado del Sistema:</strong> ${status.sistema_listo ? 'Listo' : ' No listo'}</p>
+                    <p><strong>Sensor de Huella:</strong> ${status.sistema_listo ? 'Conectado' : 'Desconectado'}</p>
                     <p><strong>Último ID:</strong> ${status.huella_id_actual || 'Ninguno'}</p>
-                    <p><strong>Registro en Curso:</strong> ${status.registro_activo ? '🔄 Activo' : '✅ Inactivo'}</p>
+                    <p><strong>Registro en Curso:</strong> ${status.registro_activo ? 'Activo' : 'Inactivo'}</p>
                 `;
             }
         } else {
-            statusElement.innerHTML = 
+            statusElement.innerHTML =
                 ` ESP32 DESCONECTADO<br>` +
                 `Error: ${status.error || 'No se pudo conectar'}<br>` +
                 `IP: ${ESP32_BASE_URL}`;
             statusElement.className = 'status-box status-offline';
-            
+
             if (infoElement) {
                 infoElement.innerHTML = '<p>No se pudo obtener información del dispositivo.</p>';
             }
         }
     } catch (error) {
-        statusElement.innerHTML = 
+        statusElement.innerHTML =
             ` ERROR DE CONEXIÓN<br>` +
             `Verifique la IP: ${ESP32_BASE_URL}`;
         statusElement.className = 'status-box status-offline';
-        
+
         if (infoElement) {
             infoElement.innerHTML = '<p>Error al consultar el estado del dispositivo.</p>';
         }
@@ -325,18 +362,17 @@ async function updateESP32Status() {
 async function testESP32Connection() {
     const status = await checkESP32Status();
     if (status.status === 'ready') {
-        alert(' Conexión exitosa al ESP32\n\n' +
-              `IP: ${ESP32_BASE_URL}\n` +
-              `WiFi: ${status.ssid || 'Conectado'}\n` +
-              `Estado: ${status.sistema_listo ? 'Sistema Listo' : 'Sistema No Listo'}`);
+        Swal.fire({
+            icon: 'success',
+            title: 'Conexión exitosa al ESP32',
+            html: `IP: ${ESP32_BASE_URL}<br>WiFi: ${status.ssid || 'Conectado'}<br>Estado: ${status.sistema_listo ? 'Sistema Listo' : 'Sistema No Listo'}`
+        });
     } else {
-        alert(' No se pudo conectar al ESP32\n\n' +
-              `IP configurada: ${ESP32_BASE_URL}\n\n` +
-              `Verifique:\n` +
-              `• La IP que aparece en la pantalla del ESP32\n` +
-              `• Que el ESP32 esté encendido\n` +
-              `• Que estén en la misma red WiFi\n` +
-              `• Que no haya firewall bloqueando la conexión`);
+        Swal.fire({
+            icon: 'error',
+            title: 'No se pudo conectar al ESP32',
+            html: `IP configurada: ${ESP32_BASE_URL}<br><br>Verifique:<br>• La IP que aparece en la pantalla del ESP32<br>• Que el ESP32 esté encendido<br>• Que estén en la misma red WiFi<br>• Que no haya firewall bloqueando la conexión`
+        });
     }
 }
 
@@ -345,8 +381,8 @@ async function sendCommandToESP32(huellaId) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.timeout = 10000;
-        
-        xhr.onreadystatechange = function() {
+
+        xhr.onreadystatechange = function () {
             if (xhr.readyState === 4) {
                 if (xhr.status === 200) {
                     try {
@@ -364,24 +400,24 @@ async function sendCommandToESP32(huellaId) {
                 }
             }
         };
-        
-        xhr.ontimeout = function() {
+
+        xhr.ontimeout = function () {
             reject(new Error('Timeout - El ESP32 no respondió'));
         };
-        
-        xhr.onerror = function() {
+
+        xhr.onerror = function () {
             reject(new Error('Error de conexión con el ESP32'));
         };
-        
+
         xhr.open('POST', `${ESP32_BASE_URL}/command`, true);
         xhr.setRequestHeader('Content-Type', 'application/json');
-        
+
         const payload = JSON.stringify({
             command: 'REGISTER_FINGERPRINT',
             huella_id: huellaId,
             timestamp: Date.now()
         });
-        
+
         xhr.send(payload);
     });
 }
@@ -390,7 +426,7 @@ async function sendCommandToESP32(huellaId) {
 async function registerFingerprint(userId) {
     try {
         console.log("Iniciando registro de huella para usuario:", userId);
-        
+
         // 1. Obtener un ID de huella del backend
         const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
             method: "POST",
@@ -406,14 +442,17 @@ async function registerFingerprint(userId) {
         }
 
         const assignData = await assignResponse.json();
-        
+
         if (!assignData.success) {
-            alert("Error asignando ID de huella: " + assignData.message);
+            Toast.fire({
+                icon: 'error',
+                title: "Error asignando ID de huella: " + assignData.message
+            });
             return;
         }
 
         const huellaId = assignData.huella_id;
-        
+
         // 2. Mostrar confirmación al usuario
         const userConfirmation = confirm(
             ` REGISTRO DE HUELLA\n\n` +
@@ -424,22 +463,25 @@ async function registerFingerprint(userId) {
             `en la pantalla.\n\n` +
             `¿Continuar con el registro?`
         );
-        
+
         if (!userConfirmation) {
             return;
         }
 
         // 3. Enviar comando al ESP32
         await sendCommandToESP32(huellaId);
-        
-        alert(' COMANDO ENVIADO EXITOSAMENTE\n\n' +
-              'El dispositivo ESP32 ha sido activado en modo registro.\n\n' +
-              'Por favor:\n' +
-              '1. Diríjase al dispositivo físico\n' + 
-              '2. Siga las instrucciones en la pantalla\n' +
-              '3. Complete el registro de su huella\n\n' +
-              'El sistema confirmará automáticamente cuando termine.');
-        
+
+        Swal.fire({
+            icon: 'success',
+            title: 'COMANDO ENVIADO EXITOSAMENTE',
+            html: 'El dispositivo ESP32 ha sido activado en modo registro.<br><br>' +
+                'Por favor:<br>' +
+                '1. Diríjase al dispositivo físico<br>' +
+                '2. Siga las instrucciones en la pantalla<br>' +
+                '3. Complete el registro de su huella<br><br>' +
+                'El sistema confirmará automáticamente cuando termine.'
+        });
+
     } catch (err) {
         console.error('Error en registro de huella:', err);
         showManualInstructions(userId, err.message);
@@ -448,18 +490,19 @@ async function registerFingerprint(userId) {
 
 // Función de fallback para instrucciones manuales
 function showManualInstructions(userId, errorMsg) {
-    alert(
-        ` NO SE PUDO CONECTAR AL DISPOSITIVO\n\n` +
-        `Error: ${errorMsg}\n\n` +
-        `INSTRUCCIONES MANUALES:\n\n` +
-        `1. Vaya al dispositivo ESP32 físico\n` +
-        `2. En el menú, seleccione la opción 1 (Registrar Huella)\n` +
-        `3. Anote el ID que se asigne automáticamente\n` +
-        `4. Siga las instrucciones en pantalla\n\n` +
-        `CONFIGURACIÓN ACTUAL:\n` +
-        `• IP ESP32: ${ESP32_BASE_URL}\n` +
-        `• User ID: ${userId}`
-    );
+    Swal.fire({
+        icon: 'error',
+        title: 'NO SE PUDO CONECTAR AL DISPOSITIVO',
+        html: `Error: ${errorMsg}<br><br>` +
+            `INSTRUCCIONES MANUALES:<br><br>` +
+            `1. Vaya al dispositivo ESP32 físico<br>` +
+            `2. En el menú, seleccione la opción 1 (Registrar Huella)<br>` +
+            `3. Anote el ID que se asigne automáticamente<br>` +
+            `4. Siga las instrucciones en pantalla<br><br>` +
+            `CONFIGURACIÓN ACTUAL:<br>` +
+            `• IP ESP32: ${ESP32_BASE_URL}<br>` +
+            `• User ID: ${userId}`
+    });
 }
 
 /*************************************
@@ -470,17 +513,17 @@ function initializeSchedules() {
     if (btnOpenCreate) {
         btnOpenCreate.addEventListener("click", () => openModal("createScheduleModal"));
     }
-    
+
     const btnSaveSchedule = document.getElementById("btnSaveSchedule");
     if (btnSaveSchedule) {
         btnSaveSchedule.addEventListener("click", saveSchedule);
     }
-    
+
     const btnSaveEdited = document.getElementById("btnSaveEditedSchedule");
     if (btnSaveEdited) {
         btnSaveEdited.addEventListener("click", saveEditedSchedule);
     }
-    
+
     const btnAssign = document.getElementById("btnAssignSchedule");
     if (btnAssign) {
         btnAssign.addEventListener("click", assignSchedule);
@@ -494,14 +537,17 @@ async function loadSchedules() {
         });
 
         if (!res.ok) {
-            alert("No se pudieron cargar los horarios");
+            Toast.fire({
+                icon: 'error',
+                title: 'No se pudieron cargar los horarios'
+            });
             return;
         }
 
         const schedules = await res.json();
         const container = document.getElementById("schedulesContainer");
         if (!container) return;
-        
+
         container.innerHTML = "";
 
         schedules.forEach(s => {
@@ -525,7 +571,10 @@ async function loadSchedules() {
 
     } catch (err) {
         console.error(err);
-        alert("Error cargando horarios");
+        Toast.fire({
+            icon: 'error',
+            title: 'Error cargando horarios'
+        });
     }
 }
 
@@ -540,7 +589,10 @@ async function saveSchedule() {
     const dias = [...document.querySelectorAll(".sch-day:checked")].map(d => d.value);
 
     if (!nombre || dias.length === 0 || !entrada || !salida) {
-        alert("Complete los campos obligatorios");
+        Toast.fire({
+            icon: 'warning',
+            title: 'Complete los campos obligatorios'
+        });
         return;
     }
 
@@ -566,17 +618,26 @@ async function saveSchedule() {
 
         const data = await res.json();
         if (!res.ok) {
-            alert(data.msg || "Error creando horario");
+            Toast.fire({
+                icon: 'error',
+                title: data.msg || "Error creando horario"
+            });
             return;
         }
 
-        alert("Horario creado");
+        Toast.fire({
+            icon: 'success',
+            title: 'Horario creado'
+        });
         closeModal("createScheduleModal");
         loadSchedules();
 
     } catch (err) {
         console.error(err);
-        alert("Error en el servidor");
+        Toast.fire({
+            icon: 'error',
+            title: 'Error en el servidor'
+        });
     }
 }
 
@@ -623,17 +684,26 @@ async function saveEditedSchedule() {
 
         const data = await res.json();
         if (!res.ok) {
-            alert(data.msg || "Error actualizando horario");
+            Toast.fire({
+                icon: 'error',
+                title: data.msg || "Error actualizando horario"
+            });
             return;
         }
 
-        alert("Horario actualizado");
+        Toast.fire({
+            icon: 'success',
+            title: 'Horario actualizado'
+        });
         closeModal("editScheduleModal");
         loadSchedules();
 
     } catch (err) {
         console.error(err);
-        alert("Error en el servidor");
+        Toast.fire({
+            icon: 'error',
+            title: 'Error en el servidor'
+        });
     }
 }
 
@@ -644,7 +714,7 @@ async function openAssignScheduleModal(scheduleId) {
     // CARGAR EMPLEADOS EN SELECT
     const userSelect = document.getElementById("assignUserSelect");
     if (!userSelect) return;
-    
+
     userSelect.innerHTML = "<option>Cargando...</option>";
 
     try {
@@ -665,7 +735,10 @@ async function openAssignScheduleModal(scheduleId) {
 
     } catch (err) {
         console.error(err);
-        alert("Error cargando empleados");
+        Toast.fire({
+            icon: 'error',
+            title: 'Error cargando empleados'
+        });
     }
 }
 
@@ -676,7 +749,10 @@ async function assignSchedule() {
     const endDate = document.getElementById("assignEndDate").value;
 
     if (!userId || !scheduleId || !startDate) {
-        alert("Debe seleccionar empleado y fecha de inicio");
+        Toast.fire({
+            icon: 'warning',
+            title: 'Debe seleccionar empleado y fecha de inicio'
+        });
         return;
     }
 
@@ -700,16 +776,25 @@ async function assignSchedule() {
         const data = await res.json();
 
         if (!res.ok) {
-            alert(data.msg || "Error asignando horario");
+            Toast.fire({
+                icon: 'error',
+                title: data.msg || "Error asignando horario"
+            });
             return;
         }
 
-        alert("Horario asignado correctamente");
+        Toast.fire({
+            icon: 'success',
+            title: 'Horario asignado correctamente'
+        });
         closeModal("assignScheduleModal");
 
     } catch (err) {
         console.error(err);
-        alert("Error en el servidor");
+        Toast.fire({
+            icon: 'error',
+            title: 'Error en el servidor'
+        });
     }
 }
 
@@ -727,21 +812,21 @@ async function loadUsersForAttendance() {
     try {
         const res = await fetch(`${BASE_URL}/attendance/admin/users`, {
             method: 'GET',
-            headers: { 
+            headers: {
                 "Authorization": "Bearer " + localStorage.getItem("jwtToken"),
                 "Content-Type": "application/json"
             }
         });
 
         if (!res.ok) throw new Error('Error al cargar usuarios');
-        
+
         const data = await res.json();
         const select = document.getElementById("attendanceUserSelect");
         if (!select) return;
-        
+
         // Mantener la opción "Todos"
         select.innerHTML = '<option value="">Todos</option>';
-        
+
         data.users.forEach(user => {
             const option = document.createElement('option');
             option.value = user.id;
@@ -759,8 +844,8 @@ async function loadAttendanceSummary() {
     const userId = document.getElementById("attendanceUserSelect").value;
     const start = document.getElementById("attendanceStart").value;
     const end = document.getElementById("attendanceEnd").value;
-    const area = document.getElementById("attendanceArea").value; 
-    
+    const area = document.getElementById("attendanceArea").value;
+
     const params = new URLSearchParams();
     if (userId) params.append("user_id", userId);
     if (start) params.append("start_date", start);
@@ -772,7 +857,7 @@ async function loadAttendanceSummary() {
     try {
         const res = await fetch(url, {
             method: 'GET',
-            headers: { 
+            headers: {
                 "Authorization": "Bearer " + localStorage.getItem("jwtToken"),
                 "Content-Type": "application/json"
             }
@@ -786,7 +871,7 @@ async function loadAttendanceSummary() {
         const data = await res.json();
         const tbody = document.getElementById("attendanceTableBody");
         if (!tbody) return;
-        
+
         tbody.innerHTML = "";
 
         if (!data.asistencias || data.asistencias.length === 0) {
@@ -835,9 +920,9 @@ async function loadAttendanceSummary() {
 /*************************************
  * INICIALIZACIÓN COMPLETA
  *************************************/
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
     console.log(" Inicializando Dashboard Admin...");
-    
+
     // 1. Configurar IP inicial del ESP32
     const savedIP = localStorage.getItem('esp32_ip');
     if (savedIP) {
@@ -847,19 +932,19 @@ document.addEventListener("DOMContentLoaded", function() {
             currentIpElement.textContent = savedIP;
         }
     }
-    
+
     // 2. Inicializar todas las funcionalidades
     initializeNavigation();
     initializeEmployeeRegistration();
     initializeSchedules();
     initializeAttendance();
-    
+
     // 3. Cargar datos iniciales
     loadUsersForAttendance();
     loadAttendanceSummary();
-    
+
     // 4. Actualizar estado ESP32 cada 30 segundos
     setInterval(updateESP32Status, 30000);
-    
+
     console.log("Dashboard Admin inicializado correctamente");
 });
