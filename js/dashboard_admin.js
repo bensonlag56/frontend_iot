@@ -300,9 +300,20 @@ async function registerAdminFingerprint() {
             return;
         }
 
-        // Decodificar el token para obtener el user_id
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const adminId = payload.user_id;
+        // Decodificar el token para obtener el user_id - USAR LA MISMA LÓGICA QUE loadAdminInfo
+        const payload = decodeJWT(token);
+        console.log("Token payload para registro:", payload);
+        
+        // Obtener adminId de la misma manera que en loadAdminInfo
+        const adminId = payload.sub; // ¡IMPORTANTE! En tu token, el user_id está en "sub"
+        
+        if (!adminId) {
+            Toast.fire({
+                icon: 'error',
+                title: 'No se pudo identificar al administrador'
+            });
+            return;
+        }
 
         console.log("Registrando huella para administrador ID:", adminId);
         
@@ -316,7 +327,9 @@ async function registerAdminFingerprint() {
                 "Content-Type": "application/json",
                 "Authorization": "Bearer " + token
             },
-            body: JSON.stringify({ user_id: adminId })
+            body: JSON.stringify({ 
+                user_id: Number(adminId) // Asegurar que sea número
+            })
         });
 
         if (!assignResponse.ok) {
@@ -344,7 +357,7 @@ async function registerAdminFingerprint() {
                 "Authorization": "Bearer " + token
             },
             body: JSON.stringify({
-                user_id: adminId,
+                user_id: Number(adminId),
                 huella_id: huellaId
             })
         });
@@ -530,7 +543,6 @@ async function registerAdminFingerprint() {
         });
     }
 }
-
 async function registerAdminRFID() {
     try {
         const token = localStorage.getItem("jwtToken");
