@@ -380,20 +380,65 @@ async function sendCommandToESP32(huellaId) {
     });
 }
 
+async function sendCommandToESP32Direct(command, huellaId = null, userId = null) {
+    const esp32IP = localStorage.getItem('esp32_ip');
+    if (!esp32IP) {
+        throw new Error('IP del ESP32 no configurada');
+    }
+
+    const url = `http://${esp32IP}/command`;
+    
+    const payload = {
+        command: command,
+        timestamp: Date.now()
+    };
+    
+    if (huellaId) {
+        payload.huella_id = huellaId;
+    }
+    
+    if (userId) {
+        payload.user_id = userId;
+    }
+
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.timeout = 15000; // 15 segundos timeout
+        
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        resolve(data);
+                    } catch (e) {
+                        resolve({ status: 'success', message: 'Comando enviado' });
+                    }
+                } else {
+                    reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
+                }
+            }
+        };
+        
+        xhr.ontimeout = function() {
+            reject(new Error('Timeout - El ESP32 no respondió'));
+        };
+        
+        xhr.onerror = function() {
+            reject(new Error('Error de conexión con el ESP32'));
+        };
+        
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify(payload));
+    });
+}
+
 async function registerFingerprint(userId) {
     try {
         console.log("Iniciando registro de huella para usuario:", userId);
         
-        const esp32IP = localStorage.getItem('esp32_ip');
-        if (!esp32IP) {
-            Swal.fire({
-                icon: 'error',
-                title: 'IP no configurada',
-                text: 'Configure la IP del ESP32 primero en la sección de control.'
-            });
-            return;
-        }
-
+        // 1. Asignar ID de huella desde backend
         const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
             method: "POST",
             headers: {
@@ -418,7 +463,9 @@ async function registerFingerprint(userId) {
         }
 
         const huellaId = assignData.huella_id;
-    
+        const esp32IP = localStorage.getItem('esp32_ip');
+        
+        // 2. Mostrar confirmación
         const confirmResult = await Swal.fire({
             icon: 'info',
             title: 'REGISTRO DE HUELLA',
@@ -446,25 +493,14 @@ async function registerFingerprint(userId) {
             return;
         }
 
-        const commandResponse = await fetch(`${BASE_URL}/esp32/command`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
-            },
-            body: JSON.stringify({
-                command: 'REGISTER_FINGERPRINT',
-                huella_id: huellaId,
-                user_id: userId,
-                esp32_ip: esp32IP
-            })
-        });
-
-        const commandData = await commandResponse.json();
+        // 3. Enviar comando DIRECTAMENTE al ESP32
+        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, userId);
         
-        if (!commandData.success) {
-            throw new Error(commandData.message || 'Error enviando comando al ESP32');
+        if (!commandResponse || commandResponse.status !== 'success') {
+            throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
         }
+
+        // 4. Mostrar progreso
         const progressSwal = Swal.fire({
             title: 'REGISTRO EN PROGRESO',
             html: `
@@ -481,8 +517,10 @@ async function registerFingerprint(userId) {
             showConfirmButton: false,
             allowOutsideClick: false
         });
+
+        // 5. Monitorear progreso
         let checkCount = 0;
-        const maxChecks = 30; 
+        const maxChecks = 45; // 45 segundos
         const checkInterval = setInterval(async () => {
             checkCount++;
             
@@ -502,34 +540,38 @@ async function registerFingerprint(userId) {
                     })
                 });
                 
-                const verifyData = await verifyResponse.json();
-                
-                if (verifyData.success && verifyData.has_template) {
-    
-                    clearInterval(checkInterval);
+                if (verifyResponse.ok) {
+                    const verifyData = await verifyResponse.json();
                     
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡HUELLA REGISTRADA EXITOSAMENTE!',
-                        html: `
-                            <div style="text-align: left;">
-                                <p><strong>Usuario:</strong> ID ${userId}</p>
-                                <p><strong>Huella ID:</strong> ${huellaId}</p>
-                                <p><strong>Estado:</strong> Template guardado en sistema</p>
-                                <p style="color: green; margin-top: 10px;">
-                                     El usuario ahora puede acceder con su huella
-                                </p>
-                            </div>
-                        `,
-                        confirmButtonText: 'Aceptar'
-                    }).then(() => {
-                        loadEmployees();
-                    });
-                    Swal.close();
+                    if (verifyData.success && verifyData.has_template) {
+                        // ¡Huella registrada exitosamente!
+                        clearInterval(checkInterval);
+                        Swal.close();
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡HUELLA REGISTRADA EXITOSAMENTE!',
+                            html: `
+                                <div style="text-align: left;">
+                                    <p><strong>Usuario:</strong> ID ${userId}</p>
+                                    <p><strong>Huella ID:</strong> ${huellaId}</p>
+                                    <p><strong>Estado:</strong> Template guardado en sistema</p>
+                                    <p style="color: green; margin-top: 10px;">
+                                        ✅ El usuario ahora puede acceder con su huella
+                                    </p>
+                                </div>
+                            `,
+                            confirmButtonText: 'Aceptar'
+                        }).then(() => {
+                            loadEmployees();
+                        });
+                    }
                 }
             } catch (error) {
                 console.error("Error verificando huella:", error);
             }
+            
+            // Si se excede el tiempo máximo
             if (checkCount >= maxChecks) {
                 clearInterval(checkInterval);
                 Swal.fire({
@@ -549,7 +591,7 @@ async function registerFingerprint(userId) {
                     confirmButtonText: 'Entendido'
                 });
             }
-        }, 1000); 
+        }, 1000); // Verificar cada segundo
 
     } catch (err) {
         console.error('Error en registro de huella:', err);
@@ -561,38 +603,28 @@ async function registerFingerprint(userId) {
                 <div style="text-align: left;">
                     <p><strong>Error:</strong> ${err.message}</p>
                     <hr>
-                    <p><strong>Instrucciones manuales:</strong></p>
+                    <p><strong>Posibles causas:</strong></p>
+                    <ul>
+                        <li>El ESP32 está apagado</li>
+                        <li>La IP está mal configurada</li>
+                        <li>Error de conexión WiFi</li>
+                    </ul>
+                    <p><strong>Solución:</strong></p>
                     <ol>
-                        <li>Vaya al dispositivo ESP32 físico</li>
-                        <li>Seleccione "Registrar Huella" en el menú</li>
-                        <li>Anote el ID que se asigne</li>
-                        <li>Regrese aquí y asigne manualmente ese ID</li>
+                        <li>Verifique que el ESP32 esté encendido</li>
+                        <li>Actualice la IP en "Control ESP32"</li>
+                        <li>Reinicie el ESP32 si es necesario</li>
                     </ol>
                 </div>
             `
         });
     }
 }
-function showManualInstructions(userId, errorMsg) {
-    Swal.fire({
-        icon: 'error',
-        title: 'NO SE PUDO CONECTAR AL DISPOSITIVO',
-        html: `Error: ${errorMsg}<br><br>` +
-            `INSTRUCCIONES MANUALES:<br><br>` +
-            `1. Vaya al dispositivo ESP32 físico<br>` +
-            `2. En el menú, seleccione la opción 1 (Registrar Huella)<br>` +
-            `3. Anote el ID que se asigne automáticamente<br>` +
-            `4. Siga las instrucciones en pantalla<br><br>` +
-            `CONFIGURACIÓN ACTUAL:<br>` +
-            `• IP ESP32: ${ESP32_BASE_URL}<br>` +
-            `• User ID: ${userId}`
-    });
-}
+
 async function registerRFID(userId) {
     try {
         console.log("Iniciando registro de RFID para usuario:", userId);
         
-      
         const esp32IP = localStorage.getItem('esp32_ip');
         if (!esp32IP) {
             Swal.fire({
@@ -603,7 +635,7 @@ async function registerRFID(userId) {
             return;
         }
 
-     
+        // 1. Mostrar confirmación
         const confirmResult = await Swal.fire({
             icon: 'info',
             title: 'REGISTRO DE RFID',
@@ -630,27 +662,14 @@ async function registerRFID(userId) {
             return;
         }
 
-       
-        const commandResponse = await fetch(`${BASE_URL}/esp32/command`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
-            },
-            body: JSON.stringify({
-                command: 'READ_RFID',
-                user_id: userId,
-                esp32_ip: esp32IP
-            })
-        });
-
-        const commandData = await commandResponse.json();
+        // 2. Enviar comando DIRECTAMENTE al ESP32
+        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, userId);
         
-        if (!commandData.success) {
-            throw new Error(commandData.message || 'Error enviando comando al ESP32');
+        if (!commandResponse || commandResponse.status !== 'success') {
+            throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
         }
 
-       
+        // 3. Mostrar espera
         Swal.fire({
             title: 'ESPERANDO RFID',
             html: `
@@ -668,16 +687,15 @@ async function registerRFID(userId) {
             allowOutsideClick: false
         });
 
-        
+        // 4. Monitorear
         let checkCount = 0;
-        const maxChecks = 60; 
+        const maxChecks = 60; // 60 segundos
         const checkInterval = setInterval(async () => {
             checkCount++;
             
             document.getElementById('rfid-progress').innerHTML = 
                 `<p>Esperando lectura de RFID... (${checkCount}/${maxChecks})</p>`;
             
-        
             try {
                 const userResponse = await fetch(`${BASE_URL}/users/?page=1&per_page=50`, {
                     headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
@@ -687,8 +705,9 @@ async function registerRFID(userId) {
                 const currentUser = usersData.users.find(u => u.id == userId);
                 
                 if (currentUser && currentUser.rfid) {
-                
+                    // ¡RFID asignado exitosamente!
                     clearInterval(checkInterval);
+                    Swal.close();
                     
                     Swal.fire({
                         icon: 'success',
@@ -698,13 +717,12 @@ async function registerRFID(userId) {
                                 <p><strong>Usuario:</strong> ID ${userId}</p>
                                 <p><strong>RFID Asignado:</strong> ${currentUser.rfid}</p>
                                 <p style="color: green; margin-top: 10px;">
-                                     El usuario ahora puede acceder con su RFID
+                                    ✅ El usuario ahora puede acceder con su RFID
                                 </p>
                             </div>
                         `,
                         confirmButtonText: 'Aceptar'
                     }).then(() => {
-                       
                         loadEmployees();
                     });
                 }
@@ -712,7 +730,7 @@ async function registerRFID(userId) {
                 console.error("Error verificando RFID:", error);
             }
             
-        
+            // Si se excede el tiempo máximo
             if (checkCount >= maxChecks) {
                 clearInterval(checkInterval);
                 Swal.fire({
@@ -732,7 +750,7 @@ async function registerRFID(userId) {
                     confirmButtonText: 'Entendido'
                 });
             }
-        }, 1000); 
+        }, 1000); // Verificar cada segundo
 
     } catch (err) {
         console.error('Error en registro de RFID:', err);
@@ -744,19 +762,33 @@ async function registerRFID(userId) {
                 <div style="text-align: left;">
                     <p><strong>Error:</strong> ${err.message}</p>
                     <hr>
-                    <p><strong>Instrucciones manuales:</strong></p>
+                    <p><strong>Solución:</strong></p>
                     <ol>
-                        <li>Vaya al dispositivo ESP32 físico</li>
-                        <li>Seleccione "Registrar RFID" en el menú</li>
-                        <li>Acercar el llavero RFID</li>
-                        <li>Anote el código RFID que aparezca</li>
-                        <li>Regrese aquí y asigne manualmente ese RFID</li>
+                        <li>Verifique que el ESP32 esté encendido</li>
+                        <li>Actualice la IP en "Control ESP32"</li>
+                        <li>Pruebe la conexión con "Probar Conexión"</li>
                     </ol>
                 </div>
             `
         });
     }
 }
+function showManualInstructions(userId, errorMsg) {
+    Swal.fire({
+        icon: 'error',
+        title: 'NO SE PUDO CONECTAR AL DISPOSITIVO',
+        html: `Error: ${errorMsg}<br><br>` +
+            `INSTRUCCIONES MANUALES:<br><br>` +
+            `1. Vaya al dispositivo ESP32 físico<br>` +
+            `2. En el menú, seleccione la opción 1 (Registrar Huella)<br>` +
+            `3. Anote el ID que se asigne automáticamente<br>` +
+            `4. Siga las instrucciones en pantalla<br><br>` +
+            `CONFIGURACIÓN ACTUAL:<br>` +
+            `• IP ESP32: ${ESP32_BASE_URL}<br>` +
+            `• User ID: ${userId}`
+    });
+}
+
 function initializeSchedules() {
     const btnOpenCreate = document.getElementById("btnOpenCreateSchedule");
     if (btnOpenCreate) {
