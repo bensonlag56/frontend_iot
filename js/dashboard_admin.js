@@ -1,5 +1,5 @@
 const BASE_URL = "https://asistencia-iot-api.onrender.com";
-let ESP32_BASE_URL = '10.139.102.152'; 
+let ESP32_BASE_URL = '192.168.1.108'; 
 const Toast = Swal.mixin({
     toast: true,
     position: 'top-end',
