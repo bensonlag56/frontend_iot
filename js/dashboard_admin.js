@@ -793,40 +793,36 @@ function configureESP32IP() {
     }
 }
 
+// En lugar de usar XMLHttpRequest inseguro, usa fetch con manejo de errores
 async function checkESP32Status() {
-    return new Promise((resolve) => {
-        const xhr = new XMLHttpRequest();
-        xhr.timeout = 5000;
-
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        const data = JSON.parse(xhr.responseText);
-                        resolve(data);
-                    } catch (e) {
-                        resolve({ status: 'ready', message: 'Conexión exitosa' });
-                    }
-                } else {
-                    resolve({
-                        status: 'offline',
-                        error: xhr.status === 0 ? 'No se pudo conectar' : `Error ${xhr.status}`
-                    });
-                }
-            }
+    const esp32IP = localStorage.getItem('esp32_ip');
+    if (!esp32IP) return { status: 'offline', error: 'IP no configurada' };
+    
+    try {
+        // Usa fetch en lugar de XMLHttpRequest
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`http://${esp32IP}/status`, {
+            method: 'GET',
+            signal: controller.signal,
+            mode: 'no-cors'  
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+            const data = await response.json();
+            return { status: 'ready', ...data };
+        }
+    } catch (error) {
+        return { 
+            status: 'offline', 
+            error: error.name === 'AbortError' ? 'Timeout' : error.message 
         };
-
-        xhr.ontimeout = function () {
-            resolve({ status: 'offline', error: 'Timeout - Sin respuesta' });
-        };
-
-        xhr.onerror = function () {
-            resolve({ status: 'offline', error: 'Error de conexión' });
-        };
-
-        xhr.open('GET', `${ESP32_BASE_URL}/status`, true);
-        xhr.send();
-    });
+    }
+    
+    return { status: 'offline', error: 'No se pudo conectar' };
 }
 
 async function updateESP32Status() {
