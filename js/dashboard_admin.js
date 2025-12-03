@@ -205,7 +205,7 @@ async function registerAdminFingerprint() {
         await updateESP32Status();
         
         // 1. Asignar ID de huella
-        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
+        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-manual`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -1329,7 +1329,7 @@ async function registerRFID(userId) {
                 console.error("Error verificando RFID:", error);
             }
             
-            // Si se excede el tiempo máximo
+
             if (checkCount >= maxChecks) {
                 clearInterval(checkInterval);
                 Swal.fire({
@@ -1349,7 +1349,7 @@ async function registerRFID(userId) {
                     confirmButtonText: 'Entendido'
                 });
             }
-        }, 1000); // Verificar cada segundo
+        }, 1000); 
 
     } catch (err) {
         console.error('Error en registro de RFID:', err);
@@ -1675,14 +1675,12 @@ async function assignSchedule() {
         });
     }
 }
-
 function initializeAttendance() {
     const btnLoadAttendance = document.getElementById("btnLoadAttendance");
     if (btnLoadAttendance) {
         btnLoadAttendance.addEventListener("click", loadAttendanceSummary);
     }
 }
-
 async function loadUsersForAttendance() {
     try {
         const res = await fetch(`${BASE_URL}/attendance/admin/users`, {
@@ -1788,8 +1786,6 @@ async function loadAttendanceSummary() {
         alert("Error generando resumen: " + err.message);
     }
 }
-
-// Inicialización
 document.addEventListener("DOMContentLoaded", function () {
     const savedIP = localStorage.getItem('esp32_ip');
     if (savedIP) {
@@ -1806,11 +1802,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeAttendance();
     loadUsersForAttendance();
     loadAttendanceSummary();
-    
-    // Actualizar estado ESP32 cada 30 segundos
     setInterval(updateESP32Status, 30000);
-    
-    // Cargar información del admin si está en la sección correspondiente
     if (document.getElementById("section-admin-registration") && 
         document.getElementById("section-admin-registration").style.display === "block") {
         loadAdminInfo();
