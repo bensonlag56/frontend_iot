@@ -11,6 +11,7 @@ const Toast = Swal.mixin({
         toast.addEventListener('mouseleave', Swal.resumeTimer)
     }
 });
+
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.style.display = "flex";
@@ -38,8 +39,11 @@ function showSection(id) {
     } else if (id === "section-admin-attendances") {
         loadUsersForAttendance();
         loadAttendanceSummary();
+    } else if (id === "section-admin-registration") {
+        loadAdminInfo();
     }
 }
+
 function initializeNavigation() {
     const navRegister = document.getElementById("nav-register-employee");
     if (navRegister) {
@@ -63,6 +67,24 @@ function initializeNavigation() {
     if (navAttendances) {
         navAttendances.addEventListener("click", () => showSection("section-admin-attendances"));
     }
+    const navEsp32Control = document.getElementById("nav-esp32-control");
+    if (navEsp32Control) {
+        navEsp32Control.addEventListener("click", () => showSection("section-esp32-control"));
+    }
+    
+    // Crear y añadir el botón de "Mis Credenciales" al sidebar
+    const sidebar = document.querySelector('.sidebar nav');
+    if (sidebar) {
+        const navAdminReg = document.createElement("button");
+        navAdminReg.id = "nav-admin-registration";
+        navAdminReg.className = "sidebar-btn";
+        navAdminReg.textContent = "Mis Credenciales";
+        navAdminReg.addEventListener("click", () => {
+            showSection("section-admin-registration");
+        });
+        sidebar.appendChild(navAdminReg);
+    }
+    
     const logoutBtn = document.getElementById("logoutBtn");
     if (logoutBtn) {
         logoutBtn.addEventListener("click", () => {
@@ -71,6 +93,521 @@ function initializeNavigation() {
         });
     }
 }
+
+// NUEVAS FUNCIONES PARA EL REGISTRO DEL ADMINISTRADOR
+async function loadAdminInfo() {
+    try {
+        const token = localStorage.getItem("jwtToken");
+        if (!token) {
+            Toast.fire({
+                icon: 'error',
+                title: 'No hay sesión activa'
+            });
+            return;
+        }
+
+        // Decodificar el token para obtener el user_id
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const adminId = payload.user_id;
+
+        // Obtener información del administrador actual
+        const res = await fetch(`${BASE_URL}/users/${adminId}`, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (!res.ok) {
+            throw new Error('Error al cargar información del administrador');
+        }
+
+        const adminData = await res.json();
+        
+        // Actualizar la UI con la información del admin
+        document.getElementById('admin-name').textContent = 
+            `${adminData.nombre} ${adminData.apellido}`;
+        document.getElementById('admin-username').textContent = adminData.username;
+        
+        const huellaElement = document.getElementById('admin-huella');
+        const rfidElement = document.getElementById('admin-rfid');
+        
+        if (adminData.huella_id) {
+            huellaElement.textContent = adminData.huella_id;
+            huellaElement.style.color = 'green';
+            huellaElement.style.fontWeight = 'bold';
+        } else {
+            huellaElement.textContent = "No asignado";
+            huellaElement.style.color = 'red';
+        }
+        
+        if (adminData.rfid) {
+            rfidElement.textContent = adminData.rfid;
+            rfidElement.style.color = 'green';
+            rfidElement.style.fontWeight = 'bold';
+        } else {
+            rfidElement.textContent = "No asignado";
+            rfidElement.style.color = 'red';
+        }
+        
+        // Actualizar botones según estado
+        const fingerprintBtn = document.querySelector('button[onclick="registerAdminFingerprint()"]');
+        const rfidBtn = document.querySelector('button[onclick="registerAdminRFID()"]');
+        
+        if (fingerprintBtn) {
+            if (adminData.huella_id) {
+                fingerprintBtn.textContent = '✓ Huella Registrada';
+                fingerprintBtn.disabled = true;
+                fingerprintBtn.style.background = '#6c757d';
+            } else {
+                fingerprintBtn.textContent = 'Registrar mi Huella';
+                fingerprintBtn.disabled = false;
+                fingerprintBtn.style.background = '#28a745';
+            }
+        }
+        
+        if (rfidBtn) {
+            if (adminData.rfid) {
+                rfidBtn.textContent = '✓ RFID Registrado';
+                rfidBtn.disabled = true;
+                rfidBtn.style.background = '#6c757d';
+            } else {
+                rfidBtn.textContent = 'Registrar mi RFID';
+                rfidBtn.disabled = false;
+                rfidBtn.style.background = '#ffc107';
+            }
+        }
+
+    } catch (err) {
+        console.error("Error cargando info admin:", err);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error al cargar información'
+        });
+    }
+}
+
+async function registerAdminFingerprint() {
+    try {
+        const token = localStorage.getItem("jwtToken");
+        if (!token) {
+            Toast.fire({
+                icon: 'error',
+                title: 'No hay sesión activa'
+            });
+            return;
+        }
+
+        // Decodificar el token para obtener el user_id
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const adminId = payload.user_id;
+
+        console.log("Registrando huella para administrador ID:", adminId);
+        
+        // Verificar conexión con ESP32 primero
+        await updateESP32Status();
+        
+        // 1. Asignar ID de huella
+        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify({ user_id: adminId })
+        });
+
+        if (!assignResponse.ok) {
+            const errorData = await assignResponse.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Error del servidor al asignar ID');
+        }
+
+        const assignData = await assignResponse.json();
+
+        if (!assignData.success) {
+            Toast.fire({
+                icon: 'error',
+                title: "Error: " + (assignData.message || "No se pudo asignar ID")
+            });
+            return;
+        }
+
+        const huellaId = assignData.huella_id;
+        
+        // 2. Asociar inmediatamente al usuario
+        const assignHuellaResponse = await fetch(`${BASE_URL}/users/huella/assign-manual`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify({
+                user_id: adminId,
+                huella_id: huellaId
+            })
+        });
+
+        if (!assignHuellaResponse.ok) {
+            const errorData = await assignHuellaResponse.json().catch(() => ({}));
+            throw new Error('Error asociando huella: ' + (errorData.message || ''));
+        }
+
+        // 3. Actualizar información del admin
+        await loadAdminInfo();
+        
+        // 4. Confirmación con el usuario
+        const confirmResult = await Swal.fire({
+            icon: 'info',
+            title: 'REGISTRO DE HUELLA',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Administrador:</strong> ID ${adminId}</p>
+                    <p><strong>Huella ID Asignado:</strong> ${huellaId}</p>
+                    <p style="color: green;">✅ Preparado para registro físico</p>
+                    <hr>
+                    <p><strong>Instrucciones:</strong></p>
+                    <ol>
+                        <li>Diríjase al dispositivo ESP32</li>
+                        <li>Espere que aparezca "REGISTRO REMOTO"</li>
+                        <li>Siga las instrucciones en pantalla</li>
+                        <li>Coloque el dedo cuando se lo indique</li>
+                    </ol>
+                    <p><small>El sistema verificará automáticamente cuando complete el registro</small></p>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Continuar',
+            cancelButtonText: 'Cancelar',
+            width: 500
+        });
+
+        if (!confirmResult.isConfirmed) {
+            return;
+        }
+
+        // 5. Enviar comando al ESP32
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            throw new Error('IP del ESP32 no configurada');
+        }
+
+        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, adminId);
+        
+        if (!commandResponse || commandResponse.status !== 'success') {
+            throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
+        }
+
+        // 6. Monitorear progreso
+        let checkCount = 0;
+        const maxChecks = 120; // 120 segundos (2 minutos)
+        
+        await Swal.fire({
+            title: 'REGISTRO EN PROGRESO',
+            html: `
+                <div style="text-align: center;">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p style="margin-top: 15px;">Esperando registro físico...</p>
+                    <p><small>Huella ID: ${huellaId}</small></p>
+                    <p><small>Administrador ID: ${adminId}</small></p>
+                    <div id="fingerprint-progress" style="margin-top: 15px; font-size: 12px;">
+                        Tiempo: 0/${maxChecks} segundos
+                    </div>
+                </div>
+            `,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            width: 400,
+            willOpen: () => {
+                const progressInterval = setInterval(async () => {
+                    checkCount++;
+                    const progressEl = document.getElementById('fingerprint-progress');
+                    if (progressEl) {
+                        progressEl.innerHTML = `Tiempo: ${checkCount}/${maxChecks} segundos`;
+                    }
+                    
+                    // Verificar estado cada 2 segundos
+                    if (checkCount % 2 === 0) {
+                        try {
+                            const verifyResponse = await fetch(`${BASE_URL}/users/huella/check/${huellaId}`, {
+                                headers: {
+                                    "Authorization": "Bearer " + token
+                                }
+                            });
+                            
+                            if (verifyResponse.ok) {
+                                const verifyData = await verifyResponse.json();
+                                
+                                if (verifyData.success && verifyData.exists && verifyData.has_template) {
+                                    clearInterval(progressInterval);
+                                    Swal.close();
+                                    
+                                    await loadAdminInfo();
+                                    
+                                    Swal.fire({
+                                        icon: 'success',
+                                        title: '¡HUELLA REGISTRADA!',
+                                        html: `
+                                            <div style="text-align: left;">
+                                                <p><strong>Huella ID:</strong> ${huellaId}</p>
+                                                <p><strong>Estado:</strong> Template guardado correctamente</p>
+                                                <p style="color: green; margin-top: 10px;">
+                                                    ✅ Ahora puedes acceder con tu huella
+                                                </p>
+                                            </div>
+                                        `,
+                                        confirmButtonText: 'Aceptar',
+                                        width: 500
+                                    });
+                                    return;
+                                }
+                            }
+                        } catch (error) {
+                            console.error("Error verificando:", error);
+                        }
+                    }
+                    
+                    // Timeout
+                    if (checkCount >= maxChecks) {
+                        clearInterval(progressInterval);
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Tiempo agotado',
+                            html: `
+                                <div style="text-align: left;">
+                                    <p>No se completó el registro en el tiempo esperado.</p>
+                                    <p><strong>Estado actual:</strong></p>
+                                    <ul>
+                                        <li>Huella ID ${huellaId} asignado</li>
+                                        <li>Puede que el registro físico esté en proceso</li>
+                                        <li>Verifique el dispositivo ESP32</li>
+                                    </ul>
+                                </div>
+                            `,
+                            confirmButtonText: 'Entendido',
+                            width: 500
+                        }).then(() => {
+                            loadAdminInfo();
+                        });
+                    }
+                }, 1000);
+                
+                // Guardar el interval ID para limpiarlo si se cierra
+                Swal.getPopup().setAttribute('data-interval-id', progressInterval);
+            },
+            willClose: () => {
+                const intervalId = Swal.getPopup().getAttribute('data-interval-id');
+                if (intervalId) clearInterval(intervalId);
+            }
+        });
+
+    } catch (err) {
+        console.error('Error en registro de huella del admin:', err);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'ERROR EN EL REGISTRO',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <hr>
+                    <p><strong>Posibles soluciones:</strong></p>
+                    <ol>
+                        <li>Verifique la conexión con el ESP32</li>
+                        <li>Asegúrese que el ESP32 esté encendido</li>
+                        <li>Revise la IP configurada en la sección "Control ESP32"</li>
+                        <li>Pruebe la conexión con el botón "Probar Conexión"</li>
+                    </ol>
+                    <button onclick="loadAdminInfo()" class="btn btn-primary mt-3" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Actualizar Información
+                    </button>
+                </div>
+            `,
+            width: 500
+        });
+    }
+}
+
+async function registerAdminRFID() {
+    try {
+        const token = localStorage.getItem("jwtToken");
+        if (!token) {
+            Toast.fire({
+                icon: 'error',
+                title: 'No hay sesión activa'
+            });
+            return;
+        }
+
+        // Decodificar el token para obtener el user_id
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const adminId = payload.user_id;
+
+        console.log("Registrando RFID para administrador ID:", adminId);
+        
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            Swal.fire({
+                icon: 'error',
+                title: 'IP no configurada',
+                text: 'Configure la IP del ESP32 primero en la sección de control.',
+                width: 400
+            });
+            return;
+        }
+
+        // 1. Mostrar confirmación
+        const confirmResult = await Swal.fire({
+            icon: 'info',
+            title: 'REGISTRO DE RFID',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Administrador:</strong> ID ${adminId}</p>
+                    <p><strong>Dispositivo ESP32:</strong> ${esp32IP}</p>
+                    <hr>
+                    <p><strong>Instrucciones:</strong></p>
+                    <ol>
+                        <li>El ESP32 se activará en modo lectura RFID</li>
+                        <li>Diríjase al dispositivo físico</li>
+                        <li>Acercar el llavero RFID al lector</li>
+                        <li>Espere el tono de confirmación</li>
+                    </ol>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Iniciar Lectura',
+            cancelButtonText: 'Cancelar',
+            width: 500
+        });
+
+        if (!confirmResult.isConfirmed) {
+            return;
+        }
+
+        // 2. Enviar comando DIRECTAMENTE al ESP32
+        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, adminId);
+        
+        if (!commandResponse || commandResponse.status !== 'success') {
+            throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
+        }
+
+        // 3. Mostrar espera
+        Swal.fire({
+            title: 'ESPERANDO RFID',
+            html: `
+                <div style="text-align: center;">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p style="margin-top: 15px;">Acercar llavero RFID al dispositivo</p>
+                    <p><small>IP: ${esp32IP}</small></p>
+                    <p><small>Administrador ID: ${adminId}</small></p>
+                    <div id="rfid-progress" style="margin-top: 15px; font-size: 12px;">
+                        Esperando lectura...
+                    </div>
+                </div>
+            `,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            width: 400
+        });
+
+        // 4. Monitorear
+        let checkCount = 0;
+        const maxChecks = 60; // 60 segundos
+        const checkInterval = setInterval(async () => {
+            checkCount++;
+            
+            const progressEl = document.getElementById('rfid-progress');
+            if (progressEl) {
+                progressEl.innerHTML = `<p>Esperando lectura de RFID... (${checkCount}/${maxChecks})</p>`;
+            }
+            
+            try {
+                // Verificar si se asignó el RFID al usuario
+                const userResponse = await fetch(`${BASE_URL}/users/${adminId}`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                
+                if (userResponse.ok) {
+                    const userData = await userResponse.json();
+                    
+                    if (userData.rfid) {
+                        // ¡RFID asignado exitosamente!
+                        clearInterval(checkInterval);
+                        Swal.close();
+                        
+                        await loadAdminInfo();
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡RFID REGISTRADO EXITOSAMENTE!',
+                            html: `
+                                <div style="text-align: left;">
+                                    <p><strong>Administrador:</strong> ID ${adminId}</p>
+                                    <p><strong>RFID Asignado:</strong> ${userData.rfid}</p>
+                                    <p style="color: green; margin-top: 10px;">
+                                        ✅ Ahora puedes acceder con tu RFID
+                                    </p>
+                                </div>
+                            `,
+                            confirmButtonText: 'Aceptar',
+                            width: 500
+                        });
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error("Error verificando RFID:", error);
+            }
+            
+            // Si se excede el tiempo máximo
+            if (checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tiempo de espera agotado',
+                    html: `
+                        <div style="text-align: left;">
+                            <p>No se detectó ningún RFID.</p>
+                            <p><strong>Opciones:</strong></p>
+                            <ol>
+                                <li>Asegúrese de que el llavero RFID esté funcionando</li>
+                                <li>Acérquelo más al lector</li>
+                                <li>Intente nuevamente</li>
+                            </ol>
+                        </div>
+                    `,
+                    confirmButtonText: 'Entendido',
+                    width: 500
+                }).then(() => {
+                    loadAdminInfo();
+                });
+            }
+        }, 1000); // Verificar cada segundo
+
+    } catch (err) {
+        console.error('Error en registro de RFID del admin:', err);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'ERROR EN EL REGISTRO',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <hr>
+                    <p><strong>Solución:</strong></p>
+                    <ol>
+                        <li>Verifique que el ESP32 esté encendido</li>
+                        <li>Actualice la IP en "Control ESP32"</li>
+                        <li>Pruebe la conexión con "Probar Conexión"</li>
+                    </ol>
+                </div>
+            `,
+            width: 500
+        });
+    }
+}
+
+// FUNCIONES EXISTENTES (las mismas que ya tenías)
 function initializeEmployeeRegistration() {
     const btnSaveEmployee = document.getElementById("btn-save-employee");
     if (btnSaveEmployee) {
@@ -151,6 +688,7 @@ async function registerEmployee() {
         console.error(err);
     }
 }
+
 async function loadEmployees() {
     try {
         const res = await fetch(`${BASE_URL}/users/?page=1&per_page=50`, {
@@ -231,6 +769,7 @@ async function loadEmployees() {
         });
     }
 }
+
 function configureESP32IP() {
     const currentIP = localStorage.getItem('esp32_ip') || '192.168.1.108';
     const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
@@ -289,6 +828,7 @@ async function checkESP32Status() {
         xhr.send();
     });
 }
+
 async function updateESP32Status() {
     const statusElement = document.getElementById('esp32-status');
     const infoElement = document.getElementById('esp32-info');
@@ -342,6 +882,7 @@ async function updateESP32Status() {
         }
     }
 }
+
 async function testESP32Connection() {
     const status = await checkESP32Status();
     if (status.status === 'ready') {
@@ -358,6 +899,7 @@ async function testESP32Connection() {
         });
     }
 }
+
 async function sendCommandToESP32(huellaId) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -569,7 +1111,7 @@ async function registerFingerprint(userId) {
                     <div id="fingerprint-progress" style="margin-top: 15px; font-size: 12px;">
                         Tiempo: 0/${maxChecks} segundos
                     </div>
-                </div>
+            </div>
             `,
             showConfirmButton: false,
             allowOutsideClick: false,
@@ -677,6 +1219,7 @@ async function registerFingerprint(userId) {
         });
     }
 }
+
 async function registerRFID(userId) {
     try {
         console.log("Iniciando registro de RFID para usuario:", userId);
@@ -829,6 +1372,7 @@ async function registerRFID(userId) {
         });
     }
 }
+
 function showManualInstructions(userId, errorMsg) {
     Swal.fire({
         icon: 'error',
@@ -1043,6 +1587,7 @@ async function saveEditedSchedule() {
         });
     }
 }
+
 async function openAssignScheduleModal(scheduleId) {
     document.getElementById("assignScheduleId").value = scheduleId;
     openModal("assignScheduleModal");
@@ -1075,6 +1620,7 @@ async function openAssignScheduleModal(scheduleId) {
         });
     }
 }
+
 async function assignSchedule() {
     const scheduleId = document.getElementById("assignScheduleId").value;
     const userId = document.getElementById("assignUserSelect").value;
@@ -1129,6 +1675,7 @@ async function assignSchedule() {
         });
     }
 }
+
 function initializeAttendance() {
     const btnLoadAttendance = document.getElementById("btnLoadAttendance");
     if (btnLoadAttendance) {
@@ -1242,6 +1789,7 @@ async function loadAttendanceSummary() {
     }
 }
 
+// Inicialización
 document.addEventListener("DOMContentLoaded", function () {
     const savedIP = localStorage.getItem('esp32_ip');
     if (savedIP) {
@@ -1258,7 +1806,15 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeAttendance();
     loadUsersForAttendance();
     loadAttendanceSummary();
+    
+    // Actualizar estado ESP32 cada 30 segundos
     setInterval(updateESP32Status, 30000);
+    
+    // Cargar información del admin si está en la sección correspondiente
+    if (document.getElementById("section-admin-registration") && 
+        document.getElementById("section-admin-registration").style.display === "block") {
+        loadAdminInfo();
+    }
 
     console.log("Dashboard Admin inicializado correctamente");
 });

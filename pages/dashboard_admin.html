@@ -253,10 +253,29 @@
 
         <div id="schedulesContainer" class="cards-container"></div>
       </section>
+      <section id="section-admin-registration" class="pane" style="display:none;">
+  <h2>Registrar mis Credenciales Biométricas</h2>
 
-      <!-- ============= -->
-      <!-- ASISTENCIAS -->
-      <!-- ============= -->
+  <div class="esp32-controls">
+    <h3>Información del Administrador</h3>
+    <div id="admin-info" style="margin-bottom: 20px;">
+      <p><strong>Nombre:</strong> <span id="admin-name">Cargando...</span></p>
+      <p><strong>Username:</strong> <span id="admin-username">Cargando...</span></p>
+      <p><strong>Huella ID:</strong> <span id="admin-huella">No asignado</span></p>
+      <p><strong>RFID:</strong> <span id="admin-rfid">No asignado</span></p>
+    </div>
+
+    <div class="control-buttons">
+      <button onclick="registerAdminFingerprint()" class="btn-fingerprint" style="padding: 10px 20px;">
+        Registrar mi Huella
+      </button>
+      <button onclick="registerAdminRFID()" class="btn-rfid" style="padding: 10px 20px;">
+        Registrar mi RFID
+      </button>
+    </div>
+  </div>
+</section>
+
       <section id="section-admin-attendances" class="pane" style="display:none;">
         <h2>Reporte de Asistencias (Admin)</h2>
 
