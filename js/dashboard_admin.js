@@ -829,7 +829,59 @@ async function checkESP32Status() {
     });
 }
 
+async function updateESP32Status() {
+    const statusElement = document.getElementById('esp32-status');
+    const infoElement = document.getElementById('esp32-info');
 
+    if (!statusElement) {
+        console.log('Elemento esp32-status no encontrado');
+        return;
+    }
+
+    statusElement.textContent = ' Consultando estado...';
+    statusElement.className = 'status-box';
+
+    try {
+        const status = await checkESP32Status();
+
+        if (status.status === 'ready') {
+            statusElement.innerHTML =
+                ` ESP32 CONECTADO | IP: ${ESP32_BASE_URL}<br>` +
+                ` WiFi: ${status.ssid || 'Conectado'} (${status.rssi || '?'} dBm)<br>` +
+                ` Huella ID Actual: ${status.huella_id_actual || 'Ninguno'}<br>` +
+                ` Registro Activo: ${status.registro_activo ? 'Sí' : 'No'}`;
+            statusElement.className = 'status-box status-online';
+
+            if (infoElement) {
+                infoElement.innerHTML = `
+                    <p><strong>Estado del Sistema:</strong> ${status.sistema_listo ? 'Listo' : ' No listo'}</p>
+                    <p><strong>Sensor de Huella:</strong> ${status.sistema_listo ? 'Conectado' : 'Desconectado'}</p>
+                    <p><strong>Último ID:</strong> ${status.huella_id_actual || 'Ninguno'}</p>
+                    <p><strong>Registro en Curso:</strong> ${status.registro_activo ? 'Activo' : 'Inactivo'}</p>
+                `;
+            }
+        } else {
+            statusElement.innerHTML =
+                ` ESP32 DESCONECTADO<br>` +
+                `Error: ${status.error || 'No se pudo conectar'}<br>` +
+                `IP: ${ESP32_BASE_URL}`;
+            statusElement.className = 'status-box status-offline';
+
+            if (infoElement) {
+                infoElement.innerHTML = '<p>No se pudo obtener información del dispositivo.</p>';
+            }
+        }
+    } catch (error) {
+        statusElement.innerHTML =
+            ` ERROR DE CONEXIÓN<br>` +
+            `Verifique la IP: ${ESP32_BASE_URL}`;
+        statusElement.className = 'status-box status-offline';
+
+        if (infoElement) {
+            infoElement.innerHTML = '<p>Error al consultar el estado del dispositivo.</p>';
+        }
+    }
+}
 
 async function testESP32Connection() {
     const status = await checkESP32Status();
@@ -893,121 +945,58 @@ async function sendCommandToESP32(huellaId) {
     });
 }
 
-// Reemplaza estas funciones:
-
 async function sendCommandToESP32Direct(command, huellaId = null, userId = null) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
         throw new Error('IP del ESP32 no configurada');
     }
 
-    try {
-        const token = localStorage.getItem("jwtToken");
-        const response = await fetch(`${BASE_URL}/users/esp32-proxy/command`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify({
-                ip: esp32IP,
-                command: command,
-                huella_id: huellaId,
-                user_id: userId,
-                timestamp: Date.now()
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Error proxy: ${errorText}`);
-        }
-
-        return await response.json();
-    } catch (err) {
-        throw new Error(`Error conectando con ESP32: ${err.message}`);
+    const url = `http://${esp32IP}/command`;
+    
+    const payload = {
+        command: command,
+        timestamp: Date.now()
+    };
+    
+    if (huellaId) {
+        payload.huella_id = huellaId;
     }
-}
-
-async function checkESP32Status() {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) {
-        return { status: 'offline', error: 'IP no configurada' };
+    
+    if (userId) {
+        payload.user_id = userId;
     }
 
-    try {
-        const token = localStorage.getItem("jwtToken");
-        const response = await fetch(`${BASE_URL}/users/esp32-proxy/status?ip=${esp32IP}`, {
-            headers: {
-                'Authorization': 'Bearer ' + token
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.timeout = 15000; // 15 segundos timeout
+        
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        resolve(data);
+                    } catch (e) {
+                        resolve({ status: 'success', message: 'Comando enviado' });
+                    }
+                } else {
+                    reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
+                }
             }
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        return await response.json();
-    } catch (err) {
-        return { status: 'offline', error: err.message };
-    }
-}
-
-// Elimina la función original checkESP32Status y reemplaza updateESP32Status:
-async function updateESP32Status() {
-    const statusElement = document.getElementById('esp32-status');
-    const infoElement = document.getElementById('esp32-info');
-
-    if (!statusElement) {
-        console.log('Elemento esp32-status no encontrado');
-        return;
-    }
-
-    statusElement.textContent = ' Consultando estado...';
-    statusElement.className = 'status-box';
-
-    try {
-        const status = await checkESP32Status();
-        const esp32IP = localStorage.getItem('esp32_ip') || '192.168.1.108';
-
-        if (status.status === 'ready') {
-            statusElement.innerHTML =
-                ` ESP32 CONECTADO | IP: ${esp32IP}<br>` +
-                ` WiFi: ${status.ssid || 'Conectado'} (${status.rssi || '?'} dBm)<br>` +
-                ` Huella ID Actual: ${status.huella_id_actual || 'Ninguno'}<br>` +
-                ` Registro Activo: ${status.registro_activo ? 'Sí' : 'No'}`;
-            statusElement.className = 'status-box status-online';
-
-            if (infoElement) {
-                infoElement.innerHTML = `
-                    <p><strong>Estado del Sistema:</strong> ${status.sistema_listo ? 'Listo' : ' No listo'}</p>
-                    <p><strong>Sensor de Huella:</strong> ${status.sistema_listo ? 'Conectado' : 'Desconectado'}</p>
-                    <p><strong>Último ID:</strong> ${status.huella_id_actual || 'Ninguno'}</p>
-                    <p><strong>Registro en Curso:</strong> ${status.registro_activo ? 'Activo' : 'Inactivo'}</p>
-                `;
-            }
-        } else {
-            statusElement.innerHTML =
-                ` ESP32 DESCONECTADO<br>` +
-                `Error: ${status.error || 'No se pudo conectar'}<br>` +
-                `IP: ${esp32IP}`;
-            statusElement.className = 'status-box status-offline';
-
-            if (infoElement) {
-                infoElement.innerHTML = '<p>No se pudo obtener información del dispositivo.</p>';
-            }
-        }
-    } catch (error) {
-        const esp32IP = localStorage.getItem('esp32_ip') || '192.168.1.108';
-        statusElement.innerHTML =
-            ` ERROR DE CONEXIÓN<br>` +
-            `Verifique la IP: ${esp32IP}`;
-        statusElement.className = 'status-box status-offline';
-
-        if (infoElement) {
-            infoElement.innerHTML = '<p>Error al consultar el estado del dispositivo.</p>';
-        }
-    }
+        };
+        
+        xhr.ontimeout = function() {
+            reject(new Error('Timeout - El ESP32 no respondió'));
+        };
+        
+        xhr.onerror = function() {
+            reject(new Error('Error de conexión con el ESP32'));
+        };
+        
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify(payload));
+    });
 }
 
 async function registerFingerprint(userId) {
@@ -1340,7 +1329,7 @@ async function registerRFID(userId) {
                 console.error("Error verificando RFID:", error);
             }
             
-
+            // Si se excede el tiempo máximo
             if (checkCount >= maxChecks) {
                 clearInterval(checkInterval);
                 Swal.fire({
