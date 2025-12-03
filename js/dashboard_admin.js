@@ -1,10 +1,5 @@
-/*************************************
- * CONFIGURACIÓN GLOBAL
- *************************************/
 const BASE_URL = "https://asistencia-iot-api.onrender.com";
-let ESP32_BASE_URL = '10.139.102.152'; // IP por defecto
-
-// Configuración de Toast (SweetAlert2)
+let ESP32_BASE_URL = '10.139.102.152'; 
 const Toast = Swal.mixin({
     toast: true,
     position: 'top-end',
@@ -16,10 +11,6 @@ const Toast = Swal.mixin({
         toast.addEventListener('mouseleave', Swal.resumeTimer)
     }
 });
-
-/*************************************
- * UTILIDADES
- *************************************/
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.style.display = "flex";
@@ -31,18 +22,13 @@ function closeModal(id) {
 }
 
 function showSection(id) {
-    // Ocultar todas las secciones
     document.querySelectorAll(".pane").forEach(p => {
         p.style.display = "none";
     });
-
-    // Mostrar la sección solicitada
     const section = document.getElementById(id);
     if (section) {
         section.style.display = "block";
     }
-
-    // Ejecutar acciones específicas de cada sección
     if (id === "section-list-employees") {
         loadEmployees();
     } else if (id === "section-schedules") {
@@ -54,18 +40,11 @@ function showSection(id) {
         loadAttendanceSummary();
     }
 }
-
-/*************************************
- * INICIALIZACIÓN DE NAVEGACIÓN
- *************************************/
 function initializeNavigation() {
-    // Registrar empleado
     const navRegister = document.getElementById("nav-register-employee");
     if (navRegister) {
         navRegister.addEventListener("click", () => showSection("section-register-employee"));
     }
-
-    // Lista de empleados
     const navList = document.getElementById("nav-list-employees");
     if (navList) {
         navList.addEventListener("click", () => {
@@ -73,8 +52,6 @@ function initializeNavigation() {
             loadEmployees();
         });
     }
-
-    // Horarios
     const navSchedules = document.getElementById("nav-schedules");
     if (navSchedules) {
         navSchedules.addEventListener("click", () => {
@@ -82,16 +59,10 @@ function initializeNavigation() {
             loadSchedules();
         });
     }
-
-    // Asistencias
     const navAttendances = document.getElementById("nav-attendances");
     if (navAttendances) {
         navAttendances.addEventListener("click", () => showSection("section-admin-attendances"));
     }
-
-    // Control ESP32 (ya configurado en HTML)
-
-    // Logout
     const logoutBtn = document.getElementById("logoutBtn");
     if (logoutBtn) {
         logoutBtn.addEventListener("click", () => {
@@ -100,10 +71,6 @@ function initializeNavigation() {
         });
     }
 }
-
-/*************************************
- * REGISTRAR EMPLEADO
- *************************************/
 function initializeEmployeeRegistration() {
     const btnSaveEmployee = document.getElementById("btn-save-employee");
     if (btnSaveEmployee) {
@@ -165,7 +132,6 @@ async function registerEmployee() {
             icon: 'success',
             title: 'Empleado registrado correctamente'
         });
-        // Limpiar formulario
         document.getElementById("empName").value = "";
         document.getElementById("empLastName").value = "";
         document.getElementById("empUsername").value = "";
@@ -185,10 +151,6 @@ async function registerEmployee() {
         console.error(err);
     }
 }
-
-/*************************************
- * LISTAR EMPLEADOS
- *************************************/
 async function loadEmployees() {
     try {
         const res = await fetch(`${BASE_URL}/users/?page=1&per_page=50`, {
@@ -221,9 +183,18 @@ async function loadEmployees() {
                 <td>${u.huella_id || "-"}</td>
                 <td>${u.rfid || "-"}</td>
                 <td>
-                    <button class="btn small btn-fingerprint" onclick="registerFingerprint(${u.id})">
-                         Registrar huella
-                    </button>
+                    <div class="action-buttons">
+                        <button class="btn small btn-fingerprint" 
+                                onclick="registerFingerprint(${u.id})"
+                                ${u.huella_id ? 'disabled' : ''}>
+                            ${u.huella_id ? '✓ Huella' : 'Registrar huella'}
+                        </button>
+                        <button class="btn small btn-rfid" 
+                                onclick="registerRFID(${u.id})"
+                                ${u.rfid ? 'disabled' : ''}>
+                            ${u.rfid ? '✓ RFID' : 'Registrar RFID'}
+                        </button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -237,12 +208,6 @@ async function loadEmployees() {
         });
     }
 }
-
-/*************************************
- * FUNCIONES ESP32
- *************************************/
-
-// Configurar IP del ESP32
 function configureESP32IP() {
     const currentIP = localStorage.getItem('esp32_ip') || '10.139.102.152';
     const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
@@ -266,7 +231,6 @@ function configureESP32IP() {
     }
 }
 
-// Verificar estado del ESP32
 async function checkESP32Status() {
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
@@ -302,8 +266,6 @@ async function checkESP32Status() {
         xhr.send();
     });
 }
-
-// Actualizar estado en la interfaz
 async function updateESP32Status() {
     const statusElement = document.getElementById('esp32-status');
     const infoElement = document.getElementById('esp32-info');
@@ -357,8 +319,6 @@ async function updateESP32Status() {
         }
     }
 }
-
-// Probar conexión al ESP32
 async function testESP32Connection() {
     const status = await checkESP32Status();
     if (status.status === 'ready') {
@@ -375,8 +335,6 @@ async function testESP32Connection() {
         });
     }
 }
-
-// Función para enviar comando al ESP32
 async function sendCommandToESP32(huellaId) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -422,12 +380,20 @@ async function sendCommandToESP32(huellaId) {
     });
 }
 
-// Función para registrar huella
 async function registerFingerprint(userId) {
     try {
         console.log("Iniciando registro de huella para usuario:", userId);
+        
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            Swal.fire({
+                icon: 'error',
+                title: 'IP no configurada',
+                text: 'Configure la IP del ESP32 primero en la sección de control.'
+            });
+            return;
+        }
 
-        // 1. Obtener un ID de huella del backend
         const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
             method: "POST",
             headers: {
@@ -452,43 +418,161 @@ async function registerFingerprint(userId) {
         }
 
         const huellaId = assignData.huella_id;
+    
+        const confirmResult = await Swal.fire({
+            icon: 'info',
+            title: 'REGISTRO DE HUELLA',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Usuario:</strong> ID ${userId}</p>
+                    <p><strong>Huella ID Asignado:</strong> ${huellaId}</p>
+                    <p><strong>Dispositivo ESP32:</strong> ${esp32IP}</p>
+                    <hr>
+                    <p><strong>Instrucciones:</strong></p>
+                    <ol>
+                        <li>El ESP32 se activará en modo registro</li>
+                        <li>Diríjase al dispositivo físico</li>
+                        <li>Siga las instrucciones en pantalla</li>
+                        <li>Coloque el dedo cuando se lo indique</li>
+                    </ol>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Iniciar Registro',
+            cancelButtonText: 'Cancelar'
+        });
 
-        // 2. Mostrar confirmación al usuario
-        const userConfirmation = confirm(
-            ` REGISTRO DE HUELLA\n\n` +
-            `ID Asignado: ${huellaId}\n` +
-            `Usuario ID: ${userId}\n\n` +
-            `El sistema ESP32 se activará en modo registro.\n` +
-            `Diríjase al dispositivo y siga las instrucciones\n` +
-            `en la pantalla.\n\n` +
-            `¿Continuar con el registro?`
-        );
-
-        if (!userConfirmation) {
+        if (!confirmResult.isConfirmed) {
             return;
         }
 
-        // 3. Enviar comando al ESP32
-        await sendCommandToESP32(huellaId);
-
-        Swal.fire({
-            icon: 'success',
-            title: 'COMANDO ENVIADO EXITOSAMENTE',
-            html: 'El dispositivo ESP32 ha sido activado en modo registro.<br><br>' +
-                'Por favor:<br>' +
-                '1. Diríjase al dispositivo físico<br>' +
-                '2. Siga las instrucciones en la pantalla<br>' +
-                '3. Complete el registro de su huella<br><br>' +
-                'El sistema confirmará automáticamente cuando termine.'
+        const commandResponse = await fetch(`${BASE_URL}/esp32/command`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
+            },
+            body: JSON.stringify({
+                command: 'REGISTER_FINGERPRINT',
+                huella_id: huellaId,
+                user_id: userId,
+                esp32_ip: esp32IP
+            })
         });
+
+        const commandData = await commandResponse.json();
+        
+        if (!commandData.success) {
+            throw new Error(commandData.message || 'Error enviando comando al ESP32');
+        }
+        const progressSwal = Swal.fire({
+            title: 'REGISTRO EN PROGRESO',
+            html: `
+                <div style="text-align: center;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p style="margin-top: 15px;">Por favor diríjase al dispositivo ESP32</p>
+                    <p><small>IP: ${esp32IP}</small></p>
+                    <p><small>Huella ID: ${huellaId}</small></p>
+                    <div id="fingerprint-progress" style="margin-top: 15px;"></div>
+                </div>
+            `,
+            showConfirmButton: false,
+            allowOutsideClick: false
+        });
+        let checkCount = 0;
+        const maxChecks = 30; 
+        const checkInterval = setInterval(async () => {
+            checkCount++;
+            
+            document.getElementById('fingerprint-progress').innerHTML = 
+                `<p>Esperando respuesta del dispositivo... (${checkCount}/${maxChecks})</p>`;
+            
+            try {
+                const verifyResponse = await fetch(`${BASE_URL}/users/huella/verify-setup`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + localStorage.getItem("jwtToken")
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        huella_id: huellaId
+                    })
+                });
+                
+                const verifyData = await verifyResponse.json();
+                
+                if (verifyData.success && verifyData.has_template) {
+    
+                    clearInterval(checkInterval);
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡HUELLA REGISTRADA EXITOSAMENTE!',
+                        html: `
+                            <div style="text-align: left;">
+                                <p><strong>Usuario:</strong> ID ${userId}</p>
+                                <p><strong>Huella ID:</strong> ${huellaId}</p>
+                                <p><strong>Estado:</strong> Template guardado en sistema</p>
+                                <p style="color: green; margin-top: 10px;">
+                                     El usuario ahora puede acceder con su huella
+                                </p>
+                            </div>
+                        `,
+                        confirmButtonText: 'Aceptar'
+                    }).then(() => {
+                        loadEmployees();
+                    });
+                    Swal.close();
+                }
+            } catch (error) {
+                console.error("Error verificando huella:", error);
+            }
+            if (checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tiempo de espera agotado',
+                    html: `
+                        <div style="text-align: left;">
+                            <p>No se recibió confirmación del registro de huella.</p>
+                            <p><strong>Opciones:</strong></p>
+                            <ol>
+                                <li>Verifique que el ESP32 esté encendido</li>
+                                <li>Revise las instrucciones en la pantalla del dispositivo</li>
+                                <li>Intente nuevamente</li>
+                            </ol>
+                        </div>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
+            }
+        }, 1000); 
 
     } catch (err) {
         console.error('Error en registro de huella:', err);
-        showManualInstructions(userId, err.message);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'ERROR EN EL REGISTRO',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <hr>
+                    <p><strong>Instrucciones manuales:</strong></p>
+                    <ol>
+                        <li>Vaya al dispositivo ESP32 físico</li>
+                        <li>Seleccione "Registrar Huella" en el menú</li>
+                        <li>Anote el ID que se asigne</li>
+                        <li>Regrese aquí y asigne manualmente ese ID</li>
+                    </ol>
+                </div>
+            `
+        });
     }
 }
-
-// Función de fallback para instrucciones manuales
 function showManualInstructions(userId, errorMsg) {
     Swal.fire({
         icon: 'error',
@@ -504,10 +588,175 @@ function showManualInstructions(userId, errorMsg) {
             `• User ID: ${userId}`
     });
 }
+async function registerRFID(userId) {
+    try {
+        console.log("Iniciando registro de RFID para usuario:", userId);
+        
+      
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            Swal.fire({
+                icon: 'error',
+                title: 'IP no configurada',
+                text: 'Configure la IP del ESP32 primero en la sección de control.'
+            });
+            return;
+        }
 
-/*************************************
- * HORARIOS
- *************************************/
+     
+        const confirmResult = await Swal.fire({
+            icon: 'info',
+            title: 'REGISTRO DE RFID',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Usuario:</strong> ID ${userId}</p>
+                    <p><strong>Dispositivo ESP32:</strong> ${esp32IP}</p>
+                    <hr>
+                    <p><strong>Instrucciones:</strong></p>
+                    <ol>
+                        <li>El ESP32 se activará en modo lectura RFID</li>
+                        <li>Diríjase al dispositivo físico</li>
+                        <li>Acercar el llavero RFID al lector</li>
+                        <li>Espere el tono de confirmación</li>
+                    </ol>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Iniciar Lectura',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!confirmResult.isConfirmed) {
+            return;
+        }
+
+       
+        const commandResponse = await fetch(`${BASE_URL}/esp32/command`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
+            },
+            body: JSON.stringify({
+                command: 'READ_RFID',
+                user_id: userId,
+                esp32_ip: esp32IP
+            })
+        });
+
+        const commandData = await commandResponse.json();
+        
+        if (!commandData.success) {
+            throw new Error(commandData.message || 'Error enviando comando al ESP32');
+        }
+
+       
+        Swal.fire({
+            title: 'ESPERANDO RFID',
+            html: `
+                <div style="text-align: center;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p style="margin-top: 15px;">Acercar llavero RFID al dispositivo</p>
+                    <p><small>IP: ${esp32IP}</small></p>
+                    <p><small>Usuario ID: ${userId}</small></p>
+                    <div id="rfid-progress" style="margin-top: 15px;"></div>
+                </div>
+            `,
+            showConfirmButton: false,
+            allowOutsideClick: false
+        });
+
+        
+        let checkCount = 0;
+        const maxChecks = 60; 
+        const checkInterval = setInterval(async () => {
+            checkCount++;
+            
+            document.getElementById('rfid-progress').innerHTML = 
+                `<p>Esperando lectura de RFID... (${checkCount}/${maxChecks})</p>`;
+            
+        
+            try {
+                const userResponse = await fetch(`${BASE_URL}/users/?page=1&per_page=50`, {
+                    headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
+                });
+                
+                const usersData = await userResponse.json();
+                const currentUser = usersData.users.find(u => u.id == userId);
+                
+                if (currentUser && currentUser.rfid) {
+                
+                    clearInterval(checkInterval);
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡RFID REGISTRADO EXITOSAMENTE!',
+                        html: `
+                            <div style="text-align: left;">
+                                <p><strong>Usuario:</strong> ID ${userId}</p>
+                                <p><strong>RFID Asignado:</strong> ${currentUser.rfid}</p>
+                                <p style="color: green; margin-top: 10px;">
+                                     El usuario ahora puede acceder con su RFID
+                                </p>
+                            </div>
+                        `,
+                        confirmButtonText: 'Aceptar'
+                    }).then(() => {
+                       
+                        loadEmployees();
+                    });
+                }
+            } catch (error) {
+                console.error("Error verificando RFID:", error);
+            }
+            
+        
+            if (checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tiempo de espera agotado',
+                    html: `
+                        <div style="text-align: left;">
+                            <p>No se detectó ningún RFID.</p>
+                            <p><strong>Opciones:</strong></p>
+                            <ol>
+                                <li>Asegúrese de que el llavero RFID esté funcionando</li>
+                                <li>Acérquelo más al lector</li>
+                                <li>Intente nuevamente</li>
+                            </ol>
+                        </div>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
+            }
+        }, 1000); 
+
+    } catch (err) {
+        console.error('Error en registro de RFID:', err);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'ERROR EN EL REGISTRO',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <hr>
+                    <p><strong>Instrucciones manuales:</strong></p>
+                    <ol>
+                        <li>Vaya al dispositivo ESP32 físico</li>
+                        <li>Seleccione "Registrar RFID" en el menú</li>
+                        <li>Acercar el llavero RFID</li>
+                        <li>Anote el código RFID que aparezca</li>
+                        <li>Regrese aquí y asigne manualmente ese RFID</li>
+                    </ol>
+                </div>
+            `
+        });
+    }
+}
 function initializeSchedules() {
     const btnOpenCreate = document.getElementById("btnOpenCreateSchedule");
     if (btnOpenCreate) {
@@ -706,12 +955,9 @@ async function saveEditedSchedule() {
         });
     }
 }
-
 async function openAssignScheduleModal(scheduleId) {
     document.getElementById("assignScheduleId").value = scheduleId;
     openModal("assignScheduleModal");
-
-    // CARGAR EMPLEADOS EN SELECT
     const userSelect = document.getElementById("assignUserSelect");
     if (!userSelect) return;
 
@@ -741,7 +987,6 @@ async function openAssignScheduleModal(scheduleId) {
         });
     }
 }
-
 async function assignSchedule() {
     const scheduleId = document.getElementById("assignScheduleId").value;
     const userId = document.getElementById("assignUserSelect").value;
@@ -755,7 +1000,6 @@ async function assignSchedule() {
         });
         return;
     }
-
     const payload = {
         schedule_id: Number(scheduleId),
         user_id: Number(userId),
@@ -797,10 +1041,6 @@ async function assignSchedule() {
         });
     }
 }
-
-/*************************************
- * ASISTENCIAS
- *************************************/
 function initializeAttendance() {
     const btnLoadAttendance = document.getElementById("btnLoadAttendance");
     if (btnLoadAttendance) {
@@ -824,7 +1064,6 @@ async function loadUsersForAttendance() {
         const select = document.getElementById("attendanceUserSelect");
         if (!select) return;
 
-        // Mantener la opción "Todos"
         select.innerHTML = '<option value="">Todos</option>';
 
         data.users.forEach(user => {
@@ -878,7 +1117,6 @@ async function loadAttendanceSummary() {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center">No se encontraron registros</td></tr>`;
             return;
         }
-
         const formatLimaDate = (isoString) => {
             if (!isoString) return "---";
             return new Date(isoString).toLocaleString("es-PE", {
@@ -886,7 +1124,6 @@ async function loadAttendanceSummary() {
                 hour12: false
             });
         };
-
         data.asistencias.forEach(r => {
             const entryStr = formatLimaDate(r.entry_time);
             const exitStr = formatLimaDate(r.exit_time);
@@ -917,13 +1154,7 @@ async function loadAttendanceSummary() {
     }
 }
 
-/*************************************
- * INICIALIZACIÓN COMPLETA
- *************************************/
 document.addEventListener("DOMContentLoaded", function () {
-    console.log(" Inicializando Dashboard Admin...");
-
-    // 1. Configurar IP inicial del ESP32
     const savedIP = localStorage.getItem('esp32_ip');
     if (savedIP) {
         ESP32_BASE_URL = `http://${savedIP}`;
@@ -933,17 +1164,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    // 2. Inicializar todas las funcionalidades
     initializeNavigation();
     initializeEmployeeRegistration();
     initializeSchedules();
     initializeAttendance();
-
-    // 3. Cargar datos iniciales
     loadUsersForAttendance();
     loadAttendanceSummary();
-
-    // 4. Actualizar estado ESP32 cada 30 segundos
     setInterval(updateESP32Status, 30000);
 
     console.log("Dashboard Admin inicializado correctamente");

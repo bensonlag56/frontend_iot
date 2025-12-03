@@ -100,6 +100,53 @@
       cursor: pointer;
       font-size: 12px;
     }
+    .action-buttons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.btn-fingerprint {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    min-width: 120px;
+}
+
+.btn-fingerprint:hover:not(:disabled) {
+    background: #218838;
+}
+
+.btn-fingerprint:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.btn-rfid {
+    background: #ffc107;
+    color: black;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    min-width: 100px;
+}
+
+.btn-rfid:hover:not(:disabled) {
+    background: #e0a800;
+}
+
+.btn-rfid:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
   </style>
 </head>
 
