@@ -1007,7 +1007,7 @@ async function registerFingerprint(userId) {
         await updateESP32Status();
         
         // 1. Asignar ID de huella
-        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
+        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-manual`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
