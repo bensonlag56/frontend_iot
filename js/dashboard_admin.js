@@ -1030,38 +1030,37 @@ function renderAccessLogsTable(logs) {
 
 function calculateExactTimeDifference(timestamp) {
     if (!timestamp) return "N/A";
-    
+
     try {
         const logDate = new Date(timestamp);
-        const now = serverNow ? new Date(serverNow) : new Date();
-        
-        const diffMs = now - logDate;
-        
-        // Si es negativo (futuro), mostrar como futuro
-        if (diffMs < 0) {
-            const futureMs = Math.abs(diffMs);
-            const futureMinutes = Math.floor(futureMs / (1000 * 60));
-            return `en ${futureMinutes} minutos`;
-        }
-        
-        // Calcular días, horas, minutos
+        const now = new Date(); // siempre usar hora local
+
+        let diffMs = now - logDate;
+
+        // Si por desfase de zona horaria da negativo,
+        // lo corregimos a 0 para evitar "en X minutos".
+        if (diffMs < 0) diffMs = 0;
+
         const diffMinutes = Math.floor(diffMs / (1000 * 60));
         const diffHours = Math.floor(diffMinutes / 60);
         const diffDays = Math.floor(diffHours / 24);
-        
+
         if (diffDays > 0) {
-            return `${diffDays}d ${diffHours % 24}h ${diffMinutes % 60}m`;
+            return `Hace ${diffDays}d ${diffHours % 24}h`;
         } else if (diffHours > 0) {
-            return `${diffHours}h ${diffMinutes % 60}m`;
+            return `Hace ${diffHours}h ${diffMinutes % 60}m`;
+        } else if (diffMinutes > 0) {
+            return `Hace ${diffMinutes}m`;
         } else {
-            return `${diffMinutes}m`;
+            return "Justo ahora";
         }
-        
+
     } catch (e) {
         console.error("Error calculando diferencia:", e);
         return "N/A";
     }
 }
+
 async function showAccessDetails(logId) {
     try {
         // Usamos el endpoint de history con filtro por ID
