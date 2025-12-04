@@ -1033,15 +1033,16 @@ function calculateExactTimeDifference(timestamp) {
 
     try {
         const logDate = new Date(timestamp);
-        const now = new Date(); // siempre usar hora local
+
+        // Usar SIEMPRE hora local del navegador (Perú)
+        const now = new Date();
 
         let diffMs = now - logDate;
 
-        // Si por desfase de zona horaria da negativo,
-        // lo corregimos a 0 para evitar "en X minutos".
+        // Evitar negativos por desfases de zona horaria o servidor
         if (diffMs < 0) diffMs = 0;
 
-        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        const diffMinutes = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMinutes / 60);
         const diffDays = Math.floor(diffHours / 24);
 
