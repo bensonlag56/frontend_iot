@@ -1054,66 +1054,114 @@ function convertToPeruTime(timestamp) {
     return new Date(utc + peruOffset);
 }
 
-function calculateExactTimeDifference(timestamp) {
-    if (!timestamp) return "N/A";
+function calculateExactTimeDifference(localTimeStr) {
+    if (!localTimeStr || localTimeStr === "N/A") return "N/A";
 
     try {
-        // Obtener hora actual en Perú
-        const peruNow = getPeruTimeNow();
+        // Parsear la fecha/hora local (ya está en formato Perú)
+        // Formato: "2025-12-04 18:04:54"
+        const [datePart, timePart] = localTimeStr.split(" ");
+        const [year, month, day] = datePart.split("-").map(Number);
+        const [hour, minute, second] = timePart.split(":").map(Number);
         
-        // Convertir timestamp a hora Perú
-        let peruLogTime;
+        // Crear fecha en hora de Perú (formato local)
+        // NOTA: Cuando creamos una fecha sin especificar zona horaria, JavaScript usa la zona horaria LOCAL del navegador
+        const logDate = new Date(year, month - 1, day, hour, minute, second);
         
-        // Verificar si el timestamp ya está en formato con zona horaria
-        if (timestamp.includes("+") || timestamp.includes("Z") || timestamp.includes("T")) {
-            // Ya tiene formato ISO
-            peruLogTime = convertToPeruTime(timestamp);
-        } else {
-            // Formato simple "YYYY-MM-DD HH:MM:SS"
-            peruLogTime = convertToPeruTime(timestamp);
-        }
+        // Obtener hora actual CORRECTA en Perú
+        // Método 1: Usar API de zona horaria
+        const nowPeru = new Date().toLocaleString("en-US", { timeZone: "America/Lima" });
+        const peruNow = new Date(nowPeru);
         
-        // Calcular diferencia
-        const diffMs = peruNow - peruLogTime;
+        // Método alternativo: Calcular offset manualmente (Perú es UTC-5)
+        const utcNow = new Date();
+        const peruOffset = -5 * 60; // Perú es UTC-5 en minutos
+        const peruNowManual = new Date(utcNow.getTime() + peruOffset * 60000);
         
-        // Validar que no sea fecha futura (por diferencias de zona horaria)
+        // Usar el método más confiable
+        const referenceNow = peruNow;
+        
+        // Calcular diferencia en milisegundos
+        const diffMs = referenceNow - logDate;
+        
+        console.log("DEBUG tiempo:", {
+            localTimeStr,
+            logDate: logDate.toString(),
+            peruNow: referenceNow.toString(),
+            diffMs: diffMs,
+            diffHours: Math.floor(diffMs / 3600000)
+        });
+        
+        // Si la diferencia es negativa (menos de 1 minuto), mostrar "Justo ahora"
         if (diffMs < 0) {
-            // Usar diferencia absoluta
-            const absDiff = Math.abs(diffMs);
-            if (absDiff < 300000) { // Menos de 5 minutos de diferencia
-                return "Justo ahora";
-            }
-            return "Recientemente";
+            return "Justo ahora";
         }
         
+        // Calcular diferencias
         const diffSeconds = Math.floor(diffMs / 1000);
         const diffMinutes = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
         
-        // Mostrar el formato más apropiado
+        // Mostrar formato apropiado
         if (diffDays >= 1) {
-            return `Hace ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`;
+            if (diffDays === 1) {
+                const remainingHours = Math.floor((diffMs % 86400000) / 3600000);
+                if (remainingHours > 0) {
+                    return `Hace 1 día ${remainingHours}h`;
+                }
+                return "Hace 1 día";
+            } else {
+                return `Hace ${diffDays} días`;
+            }
         } else if (diffHours >= 1) {
             const remainingMinutes = Math.floor((diffMs % 3600000) / 60000);
-            if (remainingMinutes > 0) {
+            if (remainingMinutes > 0 && diffHours < 24) {
                 return `Hace ${diffHours}h ${remainingMinutes}m`;
             }
-            return `Hace ${diffHours} ${diffHours === 1 ? 'hora' : 'horas'}`;
+            return `Hace ${diffHours}h`;
         } else if (diffMinutes >= 1) {
-            return `Hace ${diffMinutes} ${diffMinutes === 1 ? 'minuto' : 'minutos'}`;
+            return `Hace ${diffMinutes}m`;
         } else if (diffSeconds >= 30) {
-            return `Hace ${diffSeconds} segundos`;
+            return `Hace ${diffSeconds}s`;
         } else {
             return "Justo ahora";
         }
 
     } catch (e) {
-        console.error("Error calculando diferencia:", e, "Timestamp:", timestamp);
-        return "N/A";
+        console.error("Error calculando diferencia:", e, "LocalTime:", localTimeStr);
+        
+        // Método alternativo más simple y confiable
+        try {
+            // Crear fecha con zona horaria explícita (Perú UTC-5)
+            const logDateStr = localTimeStr.replace(" ", "T") + "-05:00";
+            const logDate = new Date(logDateStr);
+            
+            // Hora actual en UTC
+            const utcNow = new Date();
+            
+            // Convertir a Perú (UTC-5)
+            const peruOffset = -5 * 60 * 60000; // -5 horas en milisegundos
+            const peruNow = new Date(utcNow.getTime() + peruOffset);
+            
+            const diffMs = peruNow - logDate;
+            const diffMinutes = Math.floor(diffMs / 60000);
+            
+            if (diffMinutes < 1) return "Justo ahora";
+            if (diffMinutes < 60) return `Hace ${diffMinutes}m`;
+            
+            const diffHours = Math.floor(diffMinutes / 60);
+            if (diffHours < 24) return `Hace ${diffHours}h`;
+            
+            const diffDays = Math.floor(diffHours / 24);
+            return diffDays === 1 ? "Hace 1 día" : `Hace ${diffDays} días`;
+            
+        } catch (e2) {
+            console.error("Error en método alternativo:", e2);
+            return "N/A";
+        }
     }
 }
-
 async function showAccessDetails(logId) {
     try {
         // Usamos el endpoint de history con filtro por ID
