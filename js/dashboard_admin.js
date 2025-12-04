@@ -1071,79 +1071,79 @@ function calculateExactTimeDifference(timeStr) {
     if (!timeStr || timeStr === "N/A") return "N/A";
 
     try {
+        // DEBUG: Ver qué estamos recibiendo
+        console.log("Timestamp original:", timeStr);
+        
         let logDate;
-        let isUTCTime = false;
         
-        // DEBUG
-        console.log("Timestamp recibido:", timeStr);
-        
-        // Determinar el formato del timestamp
+        // Si es formato ISO UTC (con "T" y ".")
         if (timeStr.includes("T") && timeStr.includes(".")) {
-            // Formato ISO: "2025-12-04T23:04:54.871349" (UTC)
+            // Formato: "2025-12-04T23:04:54.871349" (UTC)
             logDate = new Date(timeStr);
-            isUTCTime = true;
-            console.log("Detectado formato ISO (UTC)");
-        } else if (timeStr.includes("T")) {
-            // Formato ISO sin milisegundos: "2025-12-04T23:04:54"
-            logDate = new Date(timeStr);
-            isUTCTime = true;
-            console.log("Detectado formato ISO simple (UTC)");
-        } else if (timeStr.includes(" ")) {
-            // Formato simple: "2025-12-04 18:04:54" (hora local Perú)
+            console.log("Parseado como UTC:", logDate.toISOString());
+            
+            // Convertir UTC a Perú (UTC-5)
+            const peruOffset = -5 * 60 * 60000; // -5 horas en milisegundos
+            logDate = new Date(logDate.getTime() + peruOffset);
+            console.log("Convertido a Perú:", logDate.toISOString());
+        } 
+        // Si es formato simple con espacio
+        else if (timeStr.includes(" ")) {
+            // Formato: "2025-12-04 18:04:54" (ya está en hora Perú)
+            // Añadir "T" para formato ISO y especificar zona Perú (UTC-5)
             logDate = new Date(timeStr.replace(" ", "T") + "-05:00");
-            console.log("Detectado formato simple (Perú)");
-        } else {
-            // Formato desconocido, intentar parsear
+            console.log("Parseado como hora Perú:", logDate.toISOString());
+        }
+        // Si es formato ISO sin milisegundos
+        else if (timeStr.includes("T")) {
+            // Formato: "2025-12-04T23:04:54" (UTC)
             logDate = new Date(timeStr);
-            console.log("Formato desconocido, intentando parseo directo");
+            
+            // Convertir UTC a Perú (UTC-5)
+            const peruOffset = -5 * 60 * 60000;
+            logDate = new Date(logDate.getTime() + peruOffset);
+        }
+        // Otro formato
+        else {
+            logDate = new Date(timeStr);
         }
         
         // Verificar si la fecha es válida
         if (isNaN(logDate.getTime())) {
-            console.error("Fecha inválida:", timeStr);
+            console.error("Fecha inválida después de parsear:", timeStr);
             return "N/A";
-        }
-        
-        // Si es hora UTC, convertir a Perú (UTC-5)
-        if (isUTCTime) {
-            const peruOffset = -5 * 60 * 60000; // -5 horas en milisegundos
-            logDate = new Date(logDate.getTime() + peruOffset);
-            console.log("Convertido UTC a Perú:", logDate.toISOString());
         }
         
         // Obtener hora actual en Perú
         const now = new Date();
         
-        // Ajustar hora actual a Perú si es necesario
+        // Ajustar ahora a Perú si es necesario
         // Perú es UTC-5 (300 minutos)
-        const browserOffset = now.getTimezoneOffset(); // minutos
-        const peruOffset = 300; // UTC-5 = +300 minutos
+        const browserOffset = now.getTimezoneOffset(); // minutos (positivo para zonas al oeste de UTC)
+        const peruOffset = 300; // Perú es UTC-5 = +300 minutos
         
         let peruNow;
         if (browserOffset !== peruOffset) {
-            // Ajustar al offset de Perú
+            // Ajustar la hora actual a Perú
+            // Si browserOffset es 300 (Perú), no hay que ajustar
+            // Si browserOffset es diferente, ajustar
             const offsetDiff = (peruOffset - browserOffset) * 60000;
             peruNow = new Date(now.getTime() + offsetDiff);
+            console.log("Ajustada hora actual a Perú:", peruNow.toISOString());
         } else {
             peruNow = now;
+            console.log("Ya está en Perú, sin ajuste:", peruNow.toISOString());
         }
-        
-        console.log("Hora registro (Perú):", logDate.toISOString());
-        console.log("Hora actual (Perú):", peruNow.toISOString());
         
         // Calcular diferencia
         const diffMs = peruNow - logDate;
         
-        console.log("Diferencia (ms):", diffMs);
+        console.log("Diferencia calculada (ms):", diffMs);
+        console.log("Diferencia (minutos):", Math.floor(diffMs / 60000));
         
-        // Si la diferencia es negativa o muy pequeña (por ajustes de tiempo)
-        if (diffMs < 0) {
-            // Verificar si es solo una pequeña diferencia
-            if (Math.abs(diffMs) < 30000) { // Menos de 30 segundos
-                return "Justo ahora";
-            }
-            // Fecha en el futuro (error de zona horaria)
-            return "Recientemente";
+        // Si la diferencia es muy pequeña o negativa (por ajustes de tiempo)
+        if (diffMs < 1000) { // Menos de 1 segundo
+            return "Justo ahora";
         }
         
         // Convertir a unidades legibles
@@ -1152,10 +1152,7 @@ function calculateExactTimeDifference(timeStr) {
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
         
-        // DEBUG: Mostrar cálculo
-        console.log(`Diferencias: ${diffDays}d ${diffHours}h ${diffMinutes}m ${diffSeconds}s`);
-        
-        // Formatear resultado
+        // Mostrar formato apropiado
         if (diffDays >= 1) {
             if (diffDays === 1) {
                 const remainingHours = Math.floor((diffMs % 86400000) / 3600000);
@@ -1167,7 +1164,7 @@ function calculateExactTimeDifference(timeStr) {
             return `Hace ${diffDays} días`;
         } else if (diffHours >= 1) {
             const remainingMinutes = Math.floor((diffMs % 3600000) / 60000);
-            if (remainingMinutes > 0 && diffHours < 5) {
+            if (remainingMinutes > 0) {
                 return `Hace ${diffHours}h ${remainingMinutes}m`;
             }
             return `Hace ${diffHours}h`;
@@ -1183,6 +1180,30 @@ function calculateExactTimeDifference(timeStr) {
         console.error("Error calculando diferencia:", e, "Timestamp:", timeStr);
         return "N/A";
     }
+}
+
+// Función de prueba para verificar la conversión
+function testTimeConversion() {
+    const testCases = [
+        "2025-12-04T23:04:54.871349", // UTC (debería ser 18:04:54 Perú)
+        "2025-12-04 18:04:54", // Hora Perú
+        new Date().toISOString() // Ahora UTC
+    ];
+    
+    console.log("=== PRUEBA DE CONVERSIÓN DE HORA ===");
+    testCases.forEach((time, i) => {
+        console.log(`Caso ${i + 1}: ${time}`);
+        console.log(`Resultado: ${calculateExactTimeDifference(time)}`);
+    });
+    
+    // Mostrar hora actual en Perú
+    const now = new Date();
+    const peruTime = now.toLocaleString("en-US", { 
+        timeZone: "America/Lima",
+        hour12: false
+    });
+    console.log("Hora actual en Perú:", peruTime);
+    console.log("Hora del navegador:", now.toString());
 }
 async function showAccessDetails(logId) {
     try {
