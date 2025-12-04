@@ -1269,30 +1269,95 @@ function formatRelativeTime(timestamp) {
     if (!timestamp) return '';
     
     try {
-        const date = new Date(timestamp);
-        if (isNaN(date.getTime())) return '';
+        let date;
+        
+        // Manejar diferentes formatos de timestamp
+        if (typeof timestamp === 'string') {
+            // Intentar diferentes formatos
+            if (timestamp.includes('T') && timestamp.includes('Z')) {
+                // Formato ISO (ej: "2024-12-05T15:30:00.000Z")
+                date = new Date(timestamp);
+            } else if (timestamp.includes(' ')) {
+                // Formato con espacio (ej: "2024-12-05 15:30:00")
+                // Reemplazar espacio por 'T' para crear formato ISO
+                date = new Date(timestamp.replace(' ', 'T'));
+            } else {
+                // Asumir que es un timestamp numérico
+                const numTimestamp = parseInt(timestamp);
+                if (!isNaN(numTimestamp)) {
+                    date = new Date(numTimestamp);
+                } else {
+                    date = new Date(timestamp);
+                }
+            }
+        } else if (typeof timestamp === 'number') {
+            // Timestamp numérico
+            date = new Date(timestamp);
+        } else {
+            console.warn('Formato de timestamp no reconocido:', timestamp);
+            return '';
+        }
+        
+        // Verificar si la fecha es válida
+        if (isNaN(date.getTime())) {
+            console.warn('Timestamp inválido:', timestamp);
+            return '';
+        }
         
         const now = new Date();
         const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
+        
+        // Si la diferencia es negativa (fecha en el futuro), mostrar fecha completa
+        if (diffMs < 0) {
+            return date.toLocaleString('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Calcular diferencias
+        const diffSeconds = Math.floor(diffMs / 1000);
+        const diffMinutes = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
         
-        if (diffMins < 1) return 'hace unos segundos';
-        if (diffMins < 60) return `hace ${diffMins} min`;
-        if (diffHours < 24) return `hace ${diffHours} h`;
-        if (diffDays < 7) return `hace ${diffDays} días`;
+        // Determinar el texto apropiado
+        if (diffSeconds < 60) {
+            return 'hace unos segundos';
+        } else if (diffMinutes < 60) {
+            if (diffMinutes === 1) return 'hace 1 minuto';
+            return `hace ${diffMinutes} minutos`;
+        } else if (diffHours < 24) {
+            if (diffHours === 1) return 'hace 1 hora';
+            return `hace ${diffHours} horas`;
+        } else if (diffDays < 7) {
+            if (diffDays === 1) return 'hace 1 día';
+            return `hace ${diffDays} días`;
+        } else if (diffDays < 30) {
+            const weeks = Math.floor(diffDays / 7);
+            if (weeks === 1) return 'hace 1 semana';
+            return `hace ${weeks} semanas`;
+        } else if (diffDays < 365) {
+            const months = Math.floor(diffDays / 30);
+            if (months === 1) return 'hace 1 mes';
+            return `hace ${months} meses`;
+        } else {
+            // Mostrar fecha completa para fechas muy antiguas
+            return date.toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
         
-        return date.toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
     } catch (e) {
+        console.error('Error formateando tiempo relativo:', e, 'Timestamp:', timestamp);
         return '';
     }
 }
-
 // Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
     // ... código existente ...
