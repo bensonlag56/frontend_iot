@@ -554,9 +554,20 @@ async function registerAdminRFID() {
             return;
         }
 
-        // Decodificar el token para obtener el user_id
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const adminId = payload.user_id;
+        // DECODIFICAR EL TOKEN USANDO LA MISMA FUNCIÓN QUE loadAdminInfo
+        const payload = decodeJWT(token);
+        console.log("Token payload para RFID:", payload);
+        
+        // Obtener adminId de la misma manera
+        const adminId = payload.sub || payload.user_id || payload.id; // ¡IMPORTANTE!
+        
+        if (!adminId) {
+            Toast.fire({
+                icon: 'error',
+                title: 'No se pudo identificar al administrador'
+            });
+            return;
+        }
 
         console.log("Registrando RFID para administrador ID:", adminId);
         
@@ -723,8 +734,6 @@ async function registerAdminRFID() {
         });
     }
 }
-
-// FUNCIONES EXISTENTES (las mismas que ya tenías)
 function initializeEmployeeRegistration() {
     const btnSaveEmployee = document.getElementById("btn-save-employee");
     if (btnSaveEmployee) {
