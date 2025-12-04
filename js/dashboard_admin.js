@@ -490,8 +490,6 @@ async function sendCommandToESP32DirectBrowser(command, huellaId = null, userId 
         xhr.send(JSON.stringify(payload));
     });
 }
-// ========== REGISTRO DE RFID PARA ADMIN ==========
-// ========== REGISTRO DE RFID PARA ADMIN ==========
 async function registerAdminRFID() {
     try {
         const token = localStorage.getItem("jwtToken");
@@ -513,7 +511,7 @@ async function registerAdminRFID() {
         // Verificar conexión
         await updateESP32Status();
         
-        // 1. Mostrar confirmación
+        // 1. Mostrar confirmación (igual que para empleados)
         const confirmResult = await Swal.fire({
             icon: 'info',
             title: 'REGISTRO DE RFID',
@@ -525,7 +523,7 @@ async function registerAdminRFID() {
                     <p><strong>Instrucciones:</strong></p>
                     <ol>
                         <li>Diríjase al dispositivo ESP32</li>
-                        <li>Espere que aparezca "LECTURA RFID" en pantalla</li>
+                        <li>Espere que aparezca "LECTURA RFID"</li>
                         <li>Acercar llavero RFID al lector</li>
                         <li>Espere el tono de confirmación</li>
                     </ol>
@@ -539,27 +537,16 @@ async function registerAdminRFID() {
 
         if (!confirmResult.isConfirmed) return;
 
-        // 2. Enviar comando al ESP32 - USANDO LA MISMA FUNCIÓN QUE EMPLEADOS
-        console.log("Enviando comando READ_RFID para admin...");
+        // 2. Enviar comando al ESP32 - USAR LA MISMA FUNCIÓN QUE PARA EMPLEADOS
+        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, adminId);
         
-        try {
-            // Usar el mismo método que usan los empleados
-            const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, adminId);
-            
-            if (!commandResponse || commandResponse.status !== 'success') {
-                throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
-            }
-            
-            console.log("Comando enviado exitosamente:", commandResponse);
-            
-        } catch (commandError) {
-            console.error("Error enviando comando:", commandError);
-            throw new Error(`No se pudo enviar comando al ESP32: ${commandError.message}`);
+        if (!commandResponse || commandResponse.status !== 'success') {
+            throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
         }
 
-        // 3. Monitorear - igual que la huella
+        // 3. Monitorear - Mismo tiempo que para empleados
         let checkCount = 0;
-        const maxChecks = 90; // 90 segundos para dar más tiempo
+        const maxChecks = 60;
         
         await Swal.fire({
             title: 'ESPERANDO RFID',
@@ -568,22 +555,16 @@ async function registerAdminRFID() {
                     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                         <span class="visually-hidden">Cargando...</span>
                     </div>
-                    <p style="margin-top: 15px; font-size: 16px; font-weight: bold; color: #007bff;">
-                        Acercar llavero RFID al dispositivo...
-                    </p>
+                    <p style="margin-top: 15px;">Acercar llavero RFID al dispositivo...</p>
                     <p><small>Administrador ID: ${adminId}</small></p>
                     <div id="rfid-progress" style="margin-top: 15px; font-size: 12px;">
                         Tiempo: 0/${maxChecks} segundos
-                    </div>
-                    <div style="margin-top: 10px; font-size: 11px; color: #666;">
-                        ✓ Comando enviado al ESP32<br>
-                        ✓ Modo lectura RFID activado
                     </div>
                 </div>
             `,
             showConfirmButton: false,
             allowOutsideClick: false,
-            width: 450,
+            width: 400,
             willOpen: () => {
                 const progressInterval = setInterval(async () => {
                     checkCount++;
@@ -592,40 +573,31 @@ async function registerAdminRFID() {
                         progressEl.innerHTML = `Tiempo: ${checkCount}/${maxChecks} segundos`;
                     }
                     
-                    // Verificar cada 3 segundos
+                    // Verificar cada 3 segundos (igual que para empleados)
                     if (checkCount % 3 === 0) {
                         try {
-                            // Verificar directamente el estado del admin
                             const userResponse = await fetch(`${BASE_URL}/users/${adminId}`, {
-                                headers: { 
-                                    "Authorization": "Bearer " + token,
-                                    "Content-Type": "application/json"
-                                }
+                                headers: { "Authorization": "Bearer " + token }
                             });
                             
                             if (userResponse.ok) {
                                 const userData = await userResponse.json();
                                 
-                                if (userData.rfid && userData.rfid !== "null" && userData.rfid !== "NULL") {
+                                if (userData.rfid) {
                                     clearInterval(progressInterval);
                                     Swal.close();
                                     
-                                    // Actualizar la UI
                                     await loadAdminInfo();
                                     
                                     Swal.fire({
                                         icon: 'success',
-                                        title: '¡RFID REGISTRADO EXITOSAMENTE!',
+                                        title: '¡RFID REGISTRADO!',
                                         html: `
                                             <div style="text-align: left;">
                                                 <p><strong>RFID:</strong> ${userData.rfid}</p>
-                                                <p><strong>Administrador:</strong> ${userData.nombre} ${userData.apellido}</p>
                                                 <p><strong>Estado:</strong> Asignado correctamente</p>
                                                 <p style="color: green; margin-top: 10px;">
                                                     ✅ Ahora puedes acceder con tu RFID
-                                                </p>
-                                                <p style="font-size: 12px; color: #666; margin-top: 10px;">
-                                                    El RFID quedó registrado en el sistema y puedes usarlo para acceso físico.
                                                 </p>
                                             </div>
                                         `,
@@ -640,7 +612,7 @@ async function registerAdminRFID() {
                         }
                     }
                     
-                    // Timeout
+                    // Timeout (igual que para empleados)
                     if (checkCount >= maxChecks) {
                         clearInterval(progressInterval);
                         Swal.fire({
@@ -649,25 +621,17 @@ async function registerAdminRFID() {
                             html: `
                                 <div style="text-align: left;">
                                     <p>No se completó el registro en el tiempo esperado.</p>
-                                    <p><strong>¿Qué puede haber pasado?</strong></p>
+                                    <p><strong>Verifique:</strong></p>
                                     <ul>
-                                        <li>El ESP32 no recibió el comando</li>
-                                        <li>No acercó el llavero RFID al lector</li>
-                                        <li>El llavero RFID no está funcionando</li>
-                                        <li>El ESP32 no está en modo lectura</li>
+                                        <li>Que el llavero RFID esté funcionando</li>
+                                        <li>Que el ESP32 muestre "LECTURA RFID"</li>
+                                        <li>Que acerque suficientemente el llavero</li>
                                     </ul>
-                                    <p><strong>Verifique en el ESP32:</strong></p>
-                                    <ol>
-                                        <li>Que la pantalla diga "LECTURA RFID"</li>
-                                        <li>Que pueda acercar el llavero y escuche un tono</li>
-                                        <li>Que la conexión WiFi del ESP32 funcione</li>
-                                    </ol>
                                 </div>
                             `,
                             confirmButtonText: 'Entendido',
                             width: 500
                         }).then(() => {
-                            // Actualizar información por si acaso
                             loadAdminInfo();
                         });
                     }
@@ -691,27 +655,19 @@ async function registerAdminRFID() {
                 <div style="text-align: left;">
                     <p><strong>Error:</strong> ${err.message}</p>
                     <hr>
-                    <p><strong>Solución recomendada:</strong></p>
+                    <p><strong>Posibles soluciones:</strong></p>
                     <ol>
-                        <li><strong>Acceda localmente</strong>: Abra <a href="http://${localStorage.getItem('esp32_ip') || '192.168.1.108'}" target="_blank">http://${localStorage.getItem('esp32_ip') || '192.168.1.108'}</a> desde un navegador en la misma red WiFi</li>
-                        <li><strong>Verifique IP</strong>: La IP del ESP32 es: <strong>${localStorage.getItem('esp32_ip') || '192.168.1.108'}</strong></li>
-                        <li><strong>Pruebe conexión</strong>: Use el botón "Probar Conexión" en la sección "Control ESP32"</li>
-                        <li><strong>Reinicie ESP32</strong>: Si sigue fallando, reinicie el dispositivo ESP32</li>
+                        <li>Verifique la conexión con el ESP32</li>
+                        <li>Asegúrese que el ESP32 esté encendido</li>
+                        <li>Revise la IP configurada</li>
+                        <li>Pruebe la conexión con el botón "Probar Conexión"</li>
                     </ol>
-                    <div style="margin-top: 20px; text-align: center;">
-                        <button onclick="configureESP32IP()" class="btn btn-warning" style="margin-right: 10px;">
-                            Cambiar IP
-                        </button>
-                        <button onclick="testESP32Connection()" class="btn btn-info" style="margin-right: 10px;">
-                            Probar Conexión
-                        </button>
-                        <button onclick="loadAdminInfo()" class="btn btn-primary">
-                            Actualizar Info
-                        </button>
-                    </div>
+                    <button onclick="loadAdminInfo()" class="btn btn-primary mt-3" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Actualizar Información
+                    </button>
                 </div>
             `,
-            width: 600
+            width: 500
         });
     }
 }
@@ -811,8 +767,7 @@ async function testESP32Connection() {
     }
 }
 
-// ========== FUNCIONES PARA ENVIAR COMANDOS AL ESP32 ==========
-// ========== FUNCIÓN MODIFICADA DE ENVÍO DE COMANDOS ==========
+// ========== FUNCIÓN MODIFICADA PARA ADMIN ==========
 async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
@@ -820,38 +775,37 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
     }
 
     console.log(`Enviando comando ${command} al ESP32 ${esp32IP}...`);
-    console.log("Parámetros:", { command, huellaId, userId, isAdmin });
     
     try {
-        // Para TODOS los usuarios (admin y empleados), usar siempre conexión directa
-        console.log("Intentando conexión directa desde navegador...");
-        
-        const result = await sendCommandToESP32DirectBrowser(command, huellaId, userId);
-        
-        if (result && result.status === 'success') {
-            console.log("✓ Conexión directa exitosa:", result);
-            return result;
-        } else {
-            throw new Error(result?.message || 'Error en respuesta del ESP32');
-        }
+        // Intentar conexión directa
+        console.log("1. Intentando conexión directa...");
+        const result = await sendCommandToESP32(command, huellaId, userId);
+        console.log("✓ Conexión directa exitosa:", result);
+        return result;
         
     } catch (directError) {
-        console.error("✗ Conexión directa falló:", directError.message);
+        console.log("✗ Conexión directa falló:", directError.message);
         
-        // Mensaje de error más claro
-        throw new Error(
-            `No se pudo conectar al ESP32.\n\n` +
-            `REQUISITOS PARA CONEXIÓN DIRECTA:\n` +
-            `1. Debe acceder desde la MISMA red WiFi que el ESP32\n` +
-            `2. Use HTTP (no HTTPS) para acceder localmente si es posible\n` +
-            `3. Verifique que el ESP32 esté encendido\n` +
-            `4. IP configurada: ${esp32IP}\n\n` +
-            `Error específico: ${directError.message}\n\n` +
-            `Para acceso remoto, asegúrese que el ESP32 tiene acceso a Internet.`
-        );
+        // Si falla la conexión directa, usar proxy (igual que para empleados)
+        console.log("2. Intentando conexión via proxy...");
+        try {
+            const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
+            return proxyResult;
+        } catch (proxyError) {
+            console.log("✗ Proxy también falló:", proxyError.message);
+            
+            // Mensaje de error unificado
+            throw new Error(
+                `No se pudo conectar al ESP32.\n\n` +
+                `Verifique que:\n` +
+                `1. El ESP32 esté encendido\n` +
+                `2. Su computadora esté en la misma red WiFi\n` +
+                `3. La IP ${esp32IP} sea correcta\n` +
+                `4. Pueda acceder a http://${esp32IP}/status desde el navegador`
+            );
+        }
     }
 }
-
 async function sendCommandViaProxy(command, huellaId = null, userId = null) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
@@ -887,57 +841,53 @@ async function sendCommandViaProxy(command, huellaId = null, userId = null) {
     }
 }
 
-async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
+async function sendCommandToESP32(command, huellaId = null, userId = null) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
         throw new Error('IP del ESP32 no configurada');
     }
 
-    console.log(`Enviando comando ${command} al ESP32 ${esp32IP}...`);
-    
-    try {
-        // Primero intentar conexión directa desde el navegador
-        console.log("1. Intentando conexión directa desde navegador...");
-        const result = await sendCommandToESP32FromBrowser(command, huellaId, userId);
-        console.log("✓ Conexión directa exitosa:", result);
-        return result;
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
         
-    } catch (directError) {
-        console.log("✗ Conexión directa falló:", directError.message);
+        const url = `http://${esp32IP}/command`;
+        console.log("Enviando comando a:", url);
         
-        // Si es para admin, NO usar proxy
-        if (isAdmin) {
-            throw new Error(
-                `No se pudo conectar al ESP32 para registro de Administrador.\n\n` +
-                `REQUISITOS PARA ADMIN:\n` +
-                `1. Debe acceder desde la MISMA red WiFi que el ESP32\n` +
-                `2. Use HTTP (no HTTPS) para acceder localmente\n` +
-                `3. URL local: http://localhost:5500 (si usa VS Code Live Server)\n` +
-                `4. O use: http://192.168.1.xxx (su IP local)\n\n` +
-                `Error: ${directError.message}`
-            );
-        }
+        xhr.timeout = 15000;
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         
-        // Si NO es admin, intentar proxy (para empleados desde internet)
-        console.log("2. Intentando conexión via proxy...");
-        try {
-            const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
-            return proxyResult;
-        } catch (proxyError) {
-            console.log("✗ Proxy también falló:", proxyError.message);
-            
-            throw new Error(
-                `No se pudo conectar al ESP32.\n\n` +
-                `Conexión directa: ${directError.message}\n` +
-                `Proxy: ${proxyError.message}\n\n` +
-                `Verifique que:\n` +
-                `1. El ESP32 esté encendido\n` +
-                `2. Su computadora esté en la misma red WiFi\n` +
-                `3. La IP ${esp32IP} sea correcta\n` +
-                `4. Pueda acceder a http://${esp32IP}/status`
-            );
-        }
-    }
+        const payload = {
+            command: command,
+            timestamp: Date.now()
+        };
+        
+        if (huellaId) payload.huella_id = huellaId;
+        if (userId) payload.user_id = userId;
+        
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    resolve(data);
+                } catch (e) {
+                    resolve({ status: 'success', message: 'Comando enviado' });
+                }
+            } else {
+                reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
+            }
+        };
+        
+        xhr.onerror = function() {
+            reject(new Error('Error de conexión con el ESP32'));
+        };
+        
+        xhr.ontimeout = function() {
+            reject(new Error('Timeout - El ESP32 no respondió'));
+        };
+        
+        xhr.send(JSON.stringify(payload));
+    });
 }
 
 
