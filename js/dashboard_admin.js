@@ -780,6 +780,59 @@ async function sendCommandViaProxy(command, huellaId = null, userId = null) {
         throw error;
     }
 }
+// Función para enviar comando AL ESP32 DESDE EL NAVEGADOR (no desde el backend)
+async function sendCommandToESP32FromBrowser(command, huellaId = null, userId = null) {
+    const esp32IP = localStorage.getItem('esp32_ip');
+    if (!esp32IP) {
+        throw new Error('IP del ESP32 no configurada');
+    }
+
+    // IMPORTANTE: El navegador está en la misma red local que el ESP32
+    // Usamos XMLHttpRequest que maneja mejor CORS
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        // URL del ESP32 local - el navegador PUEDE acceder si está en la misma red
+        const url = `http://${esp32IP}/command`;
+        
+        console.log("Enviando comando directo al ESP32:", url);
+        
+        xhr.timeout = 15000;
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        
+        const payload = {
+            command: command,
+            timestamp: Date.now()
+        };
+        
+        if (huellaId) payload.huella_id = huellaId;
+        if (userId) payload.user_id = userId;
+        
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    resolve(data);
+                } catch (e) {
+                    resolve({ status: 'success', message: 'Comando enviado' });
+                }
+            } else {
+                reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
+            }
+        };
+        
+        xhr.onerror = function() {
+            reject(new Error('Error de conexión con el ESP32'));
+        };
+        
+        xhr.ontimeout = function() {
+            reject(new Error('Timeout - El ESP32 no respondió'));
+        };
+        
+        xhr.send(JSON.stringify(payload));
+    });
+}
 function initializeEmployeeRegistration() {
     const btnSaveEmployee = document.getElementById("btn-save-employee");
     if (btnSaveEmployee) {
