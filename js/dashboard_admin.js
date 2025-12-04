@@ -554,12 +554,11 @@ async function registerAdminRFID() {
             return;
         }
 
-        // DECODIFICAR EL TOKEN USANDO LA MISMA FUNCIÓN QUE loadAdminInfo
+        // Obtener ID del admin
         const payload = decodeJWT(token);
         console.log("Token payload para RFID:", payload);
         
-        // Obtener adminId de la misma manera
-        const adminId = payload.sub || payload.user_id || payload.id; // ¡IMPORTANTE!
+        const adminId = payload.sub; // Esto funciona según tu log: sub: '1'
         
         if (!adminId) {
             Toast.fire({
@@ -610,10 +609,14 @@ async function registerAdminRFID() {
             return;
         }
 
-        // 2. Enviar comando DIRECTAMENTE al ESP32
-        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, adminId);
+        // 2. Enviar comando - USANDO PROXY
+        console.log("Enviando comando READ_RFID para user_id:", adminId);
         
-        if (!commandResponse || commandResponse.status !== 'success') {
+        const commandResponse = await sendCommandViaProxy('READ_RFID', null, adminId);
+        
+        console.log("Respuesta del proxy:", commandResponse);
+        
+        if (!commandResponse || !commandResponse.success) {
             throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
         }
 
@@ -640,7 +643,7 @@ async function registerAdminRFID() {
 
         // 4. Monitorear
         let checkCount = 0;
-        const maxChecks = 60; // 60 segundos
+        const maxChecks = 60;
         const checkInterval = setInterval(async () => {
             checkCount++;
             
@@ -710,7 +713,7 @@ async function registerAdminRFID() {
                     loadAdminInfo();
                 });
             }
-        }, 1000); // Verificar cada segundo
+        }, 1000);
 
     } catch (err) {
         console.error('Error en registro de RFID del admin:', err);
@@ -725,13 +728,56 @@ async function registerAdminRFID() {
                     <p><strong>Solución:</strong></p>
                     <ol>
                         <li>Verifique que el ESP32 esté encendido</li>
-                        <li>Actualice la IP en "Control ESP32"</li>
-                        <li>Pruebe la conexión con "Probar Conexión"</li>
+                        <li>Verifique la IP (${localStorage.getItem('esp32_ip')})</li>
+                        <li>El ESP32 debe estar en la misma red que tu computadora</li>
+                        <li>Pruebe acceder manualmente a http://${localStorage.getItem('esp32_ip')}/status</li>
+                        <li>Verifique los logs del ESP32 para ver el error 400</li>
                     </ol>
                 </div>
             `,
             width: 500
         });
+    }
+}
+
+// Función para enviar comando via proxy
+async function sendCommandViaProxy(command, huellaId = null, userId = null) {
+    const esp32IP = localStorage.getItem('esp32_ip');
+    if (!esp32IP) {
+        throw new Error('IP del ESP32 no configurada');
+    }
+
+    const url = `${BASE_URL}/esp32/proxy/command`;
+    
+    const payload = {
+        esp32_ip: esp32IP,
+        command: command
+    };
+    
+    if (huellaId) {
+        payload.huella_id = huellaId;
+    }
+    
+    if (userId) {
+        payload.user_id = userId;
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        return data;
+        
+    } catch (error) {
+        console.error('Error enviando comando via proxy:', error);
+        throw error;
     }
 }
 function initializeEmployeeRegistration() {
@@ -1072,11 +1118,12 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null)
         throw new Error('IP del ESP32 no configurada');
     }
 
-    const url = `http://${esp32IP}/command`;
+    // USAR PROXY EN LUGAR DE DIRECTO
+    const url = `${BASE_URL}/esp32/proxy/command`;
     
     const payload = {
-        command: command,
-        timestamp: Date.now()
+        esp32_ip: esp32IP,
+        command: command
     };
     
     if (huellaId) {
@@ -1087,39 +1134,29 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null)
         payload.user_id = userId;
     }
 
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.timeout = 15000; // 15 segundos timeout
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
+            },
+            body: JSON.stringify(payload)
+        });
         
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        const data = JSON.parse(xhr.responseText);
-                        resolve(data);
-                    } catch (e) {
-                        resolve({ status: 'success', message: 'Comando enviado' });
-                    }
-                } else {
-                    reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
-                }
-            }
-        };
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+        }
         
-        xhr.ontimeout = function() {
-            reject(new Error('Timeout - El ESP32 no respondió'));
-        };
+        const data = await response.json();
+        return data;
         
-        xhr.onerror = function() {
-            reject(new Error('Error de conexión con el ESP32'));
-        };
-        
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(JSON.stringify(payload));
-    });
+    } catch (error) {
+        console.error('Error enviando comando via proxy:', error);
+        throw error;
+    }
 }
-
 async function registerFingerprint(userId) {
     try {
         console.log("Iniciando registro de huella para usuario:", userId);
