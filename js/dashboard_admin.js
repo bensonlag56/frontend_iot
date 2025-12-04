@@ -969,21 +969,21 @@ function renderAccessLogsTable(logs) {
         }
         
         // Determinar ícono según sensor
-        let sensorIcon = '🔍';
+        let sensorIcon = '';
         let sensorText = log.sensor_type || 'Desconocido';
         if (sensorText === 'Huella') sensorIcon = '';
         else if (sensorText === 'RFID') sensorIcon = '';
         else if (sensorText === 'ZonaSegura') sensorIcon = '';
         
         // Determinar ícono según tipo de acción
-        let actionIcon = '↔';
+        let actionIcon = '';
         let actionText = 'ACCESO';
         if (log.full_action_type) {
             if (log.full_action_type.includes('ENTRADA')) {
-                actionIcon = '⬇';
+                actionIcon = '';
                 actionText = 'ENTRADA';
             } else if (log.full_action_type.includes('SALIDA')) {
-                actionIcon = '⬆';
+                actionIcon = '';
                 actionText = 'SALIDA';
             } else if (log.full_action_type.includes('ZONA_SEGURA')) {
                 actionIcon = '';
@@ -991,15 +991,24 @@ function renderAccessLogsTable(logs) {
             }
         }
         
-        // Método de acceso
+
         let accessMethod = log.access_method || 'Desconocido';
         
-        // Usuario
+
         const userName = log.user_name || `Usuario ${log.user_id}`;
         const userUsername = log.user_username || 'N/A';
         
-        // Hora local
+
         const localTime = log.local_time || 'N/A';
+        
+        // Calcular minutos transcurridos
+        const timestampDate = new Date(log.timestamp);
+        const now = serverNow ? new Date(serverNow) : new Date();
+        const diffMs = now - timestampDate;
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        const minutesText = diffMinutes >= 0 ? 
+            `${diffMinutes} min` : 
+            'En el futuro';
         
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -1009,8 +1018,11 @@ function renderAccessLogsTable(logs) {
                 <small style="color: #666;">ID: ${log.user_id} | @${userUsername}</small>
             </td>
             <td>
-                ${localTime}<br>
-                <small style="color: #666;">${formatRelativeTime(log.timestamp)}</small>
+                <div style="font-weight: 500;">${localTime}</div>
+                <small style="color: #666;">
+                    <i class="fas fa-clock"></i> ${formatRelativeTime(log.timestamp)}<br>
+                    (Hace ${minutesText})
+                </small>
             </td>
             <td>
                 <div style="display: flex; align-items: center; gap: 5px;">
@@ -1046,7 +1058,40 @@ function renderAccessLogsTable(logs) {
         tbody.appendChild(row);
     });
 }
-
+function calculateExactTimeDifference(timestamp) {
+    if (!timestamp) return "N/A";
+    
+    try {
+        const logDate = new Date(timestamp);
+        const now = serverNow ? new Date(serverNow) : new Date();
+        
+        const diffMs = now - logDate;
+        
+        // Si es negativo (futuro), mostrar como futuro
+        if (diffMs < 0) {
+            const futureMs = Math.abs(diffMs);
+            const futureMinutes = Math.floor(futureMs / (1000 * 60));
+            return `en ${futureMinutes} minutos`;
+        }
+        
+        // Calcular días, horas, minutos
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMinutes / 60);
+        const diffDays = Math.floor(diffHours / 24);
+        
+        if (diffDays > 0) {
+            return `${diffDays}d ${diffHours % 24}h ${diffMinutes % 60}m`;
+        } else if (diffHours > 0) {
+            return `${diffHours}h ${diffMinutes % 60}m`;
+        } else {
+            return `${diffMinutes}m`;
+        }
+        
+    } catch (e) {
+        console.error("Error calculando diferencia:", e);
+        return "N/A";
+    }
+}
 async function showAccessDetails(logId) {
     try {
         // Usamos el endpoint de history con filtro por ID
@@ -1281,26 +1326,48 @@ function parseServerDate(dateStr) {
 
 function formatRelativeTime(timestamp) {
     if (!timestamp) return "";
-
-    const date = parseServerDate(timestamp);
-    if (!date || isNaN(date.getTime())) return "";
-
-    const now = serverNow ? new Date(serverNow) : new Date();
-    const diffMs = now - date;
-
-    if (diffMs < 0) return date.toLocaleString("es-ES");
-
-    const sec = Math.floor(diffMs / 1000);
-    const min = Math.floor(sec / 60);
-    const hrs = Math.floor(min / 60);
-    const days = Math.floor(hrs / 24);
-
-    if (sec < 60) return "hace unos segundos";
-    if (min < 60) return min === 1 ? "hace 1 minuto" : `hace ${min} minutos`;
-    if (hrs < 24) return hrs === 1 ? "hace 1 hora" : `hace ${hrs} horas`;
-    if (days < 7) return days === 1 ? "hace 1 día" : `hace ${days} días`;
-
-    return date.toLocaleDateString("es-ES");
+    
+    try {
+        // Parsear la fecha del timestamp
+        const logDate = new Date(timestamp);
+        if (isNaN(logDate.getTime())) return "";
+        
+        // Usar hora del servidor si está disponible, sino usar hora local
+        const now = serverNow ? new Date(serverNow) : new Date();
+        
+        // Calcular diferencia en milisegundos
+        const diffMs = now - logDate;
+        
+        // Si es futuro (por problemas de zona horaria), mostrar fecha completa
+        if (diffMs < 0) {
+            return logDate.toLocaleString("es-PE", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+        }
+        
+        // Convertir a minutos
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        
+        if (diffMinutes < 1) {
+            return "hace unos segundos";
+        } else if (diffMinutes < 60) {
+            return diffMinutes === 1 ? "hace 1 minuto" : `hace ${diffMinutes} minutos`;
+        } else if (diffMinutes < 1440) { // menos de 24 horas
+            const diffHours = Math.floor(diffMinutes / 60);
+            return diffHours === 1 ? "hace 1 hora" : `hace ${diffHours} horas`;
+        } else {
+            const diffDays = Math.floor(diffMinutes / 1440);
+            return diffDays === 1 ? "hace 1 día" : `hace ${diffDays} días`;
+        }
+        
+    } catch (e) {
+        console.error("Error calculando tiempo relativo:", e);
+        return "";
+    }
 }
 
 
