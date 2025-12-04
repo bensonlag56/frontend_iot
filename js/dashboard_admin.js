@@ -1266,48 +1266,53 @@ async function loadAccessUsers() {
     }
 }
 function formatRelativeTime(timestamp) {
-    if (!timestamp) return '';
-    
+    if (!timestamp || timestamp === "0" || timestamp === 0 || timestamp === "null" || timestamp === "undefined") {
+        return '';
+    }
+
     try {
         let date;
-        
-        // Manejar diferentes formatos de timestamp
+
+        // Normalizar entrada
         if (typeof timestamp === 'string') {
-            // Intentar diferentes formatos
-            if (timestamp.includes('T') && timestamp.includes('Z')) {
-                // Formato ISO (ej: "2024-12-05T15:30:00.000Z")
-                date = new Date(timestamp);
-            } else if (timestamp.includes(' ')) {
-                // Formato con espacio (ej: "2024-12-05 15:30:00")
-                // Reemplazar espacio por 'T' para crear formato ISO
-                date = new Date(timestamp.replace(' ', 'T'));
-            } else {
-                // Asumir que es un timestamp numérico
+            timestamp = timestamp.trim();
+
+            if (!timestamp) return '';
+
+            // Si es número en string (ej. "1701212341234")
+            if (/^\d+$/.test(timestamp)) {
                 const numTimestamp = parseInt(timestamp);
-                if (!isNaN(numTimestamp)) {
-                    date = new Date(numTimestamp);
-                } else {
-                    date = new Date(timestamp);
-                }
+                if (numTimestamp === 0) return ''; // Evita 1970
+                date = new Date(numTimestamp);
             }
-        } else if (typeof timestamp === 'number') {
-            // Timestamp numérico
+            // Formato ISO
+            else if (timestamp.includes('T') && timestamp.includes('Z')) {
+                date = new Date(timestamp);
+            }
+            // Formato "2024-12-05 15:30:00"
+            else if (timestamp.includes(' ')) {
+                date = new Date(timestamp.replace(' ', 'T'));
+            }
+            // Intento final
+            else {
+                date = new Date(timestamp);
+            }
+        }
+
+        else if (typeof timestamp === 'number') {
+            if (timestamp === 0) return ''; // Evita 1970
             date = new Date(timestamp);
-        } else {
-            console.warn('Formato de timestamp no reconocido:', timestamp);
+        }
+
+        // Validar fecha
+        if (!date || isNaN(date.getTime()) || date.getFullYear() === 1970) {
             return '';
         }
-        
-        // Verificar si la fecha es válida
-        if (isNaN(date.getTime())) {
-            console.warn('Timestamp inválido:', timestamp);
-            return '';
-        }
-        
+
         const now = new Date();
         const diffMs = now - date;
-        
-        // Si la diferencia es negativa (fecha en el futuro), mostrar fecha completa
+
+        // Fecha futura → devolver fecha normal
         if (diffMs < 0) {
             return date.toLocaleString('es-ES', {
                 day: '2-digit',
@@ -1317,47 +1322,39 @@ function formatRelativeTime(timestamp) {
                 minute: '2-digit'
             });
         }
-        
-        // Calcular diferencias
+
         const diffSeconds = Math.floor(diffMs / 1000);
         const diffMinutes = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
-        
-        // Determinar el texto apropiado
-        if (diffSeconds < 60) {
-            return 'hace unos segundos';
-        } else if (diffMinutes < 60) {
-            if (diffMinutes === 1) return 'hace 1 minuto';
-            return `hace ${diffMinutes} minutos`;
-        } else if (diffHours < 24) {
-            if (diffHours === 1) return 'hace 1 hora';
-            return `hace ${diffHours} horas`;
-        } else if (diffDays < 7) {
-            if (diffDays === 1) return 'hace 1 día';
-            return `hace ${diffDays} días`;
-        } else if (diffDays < 30) {
+
+        if (diffSeconds < 60) return 'hace unos segundos';
+        if (diffMinutes < 60) return diffMinutes === 1 ? 'hace 1 minuto' : `hace ${diffMinutes} minutos`;
+        if (diffHours < 24) return diffHours === 1 ? 'hace 1 hora' : `hace ${diffHours} horas`;
+        if (diffDays < 7) return diffDays === 1 ? 'hace 1 día' : `hace ${diffDays} días`;
+
+        if (diffDays < 30) {
             const weeks = Math.floor(diffDays / 7);
-            if (weeks === 1) return 'hace 1 semana';
-            return `hace ${weeks} semanas`;
-        } else if (diffDays < 365) {
-            const months = Math.floor(diffDays / 30);
-            if (months === 1) return 'hace 1 mes';
-            return `hace ${months} meses`;
-        } else {
-            // Mostrar fecha completa para fechas muy antiguas
-            return date.toLocaleDateString('es-ES', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            });
+            return weeks === 1 ? 'hace 1 semana' : `hace ${weeks} semanas`;
         }
-        
+
+        if (diffDays < 365) {
+            const months = Math.floor(diffDays / 30);
+            return months === 1 ? 'hace 1 mes' : `hace ${months} meses`;
+        }
+
+        return date.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
     } catch (e) {
         console.error('Error formateando tiempo relativo:', e, 'Timestamp:', timestamp);
         return '';
     }
 }
+
 // Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
     // ... código existente ...
