@@ -1032,20 +1032,10 @@ function calculateExactTimeDifference(timestamp) {
     if (!timestamp) return "N/A";
 
     try {
-        // Convertir a ISO válido
-        const parts = timestamp.split(/[- :]/);
+        // Convertir a formato ISO válido
+        const fixedTimestamp = timestamp.replace(" ", "T");
 
-        // parts = [YYYY, MM, DD, HH, mm, ss]
-        const year = parseInt(parts[0]);
-        const month = parseInt(parts[1]) - 1; // JS usa 0-11
-        const day = parseInt(parts[2]);
-        const hour = parseInt(parts[3]);
-        const minute = parseInt(parts[4]);
-        const second = parseInt(parts[5]);
-
-        // Construir fecha EXACTAMENTE como Perú sin interpretar UTC
-        const logDate = new Date(year, month, day, hour, minute, second);
-
+        const logDate = new Date(fixedTimestamp);
         const now = new Date();
 
         let diffMs = now - logDate;
@@ -1062,7 +1052,7 @@ function calculateExactTimeDifference(timestamp) {
         } else if (diffMinutes > 0) {
             return `Hace ${diffMinutes}m`;
         } else {
-            return "Hace 1m";
+            return "Justo ahora";
         }
 
     } catch (e) {
