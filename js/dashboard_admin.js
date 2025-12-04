@@ -110,9 +110,9 @@ async function loadAdminInfo() {
 
         // Decodificar el token
         const payload = decodeJWT(token);
-        const adminId = payload.sub || payload.user_id || payload.id;
+        const userId = payload.sub || payload.user_id || payload.id;
         
-        if (!adminId) {
+        if (!userId) {
             Toast.fire({
                 icon: 'error',
                 title: 'Error: No se pudo identificar al administrador'
@@ -121,7 +121,7 @@ async function loadAdminInfo() {
         }
 
         // Obtener información del administrador
-        const res = await fetch(`${BASE_URL}/users/${adminId}`, {
+        const res = await fetch(`${BASE_URL}/users/${userId}`, {
             headers: { 
                 "Authorization": "Bearer " + token,
                 "Content-Type": "application/json"
@@ -222,14 +222,14 @@ async function registerAdminFingerprint() {
         }
 
         const payload = decodeJWT(token);
-        const adminId = payload.sub;
+        const userId = payload.sub;
         
-        if (!adminId) {
+        if (!userId) {
             Toast.fire({ icon: 'error', title: 'No se pudo identificar al administrador' });
             return;
         }
 
-        console.log("Registrando huella para admin ID:", adminId);
+        console.log("Registrando huella para admin ID:", userId);
         
         // Verificar conexión con ESP32
         await updateESP32Status();
@@ -241,7 +241,7 @@ async function registerAdminFingerprint() {
                 "Content-Type": "application/json",
                 "Authorization": "Bearer " + token
             },
-            body: JSON.stringify({ user_id: Number(adminId) })
+            body: JSON.stringify({ user_id: Number(userId) })
         });
 
         if (!assignResponse.ok) {
@@ -268,7 +268,7 @@ async function registerAdminFingerprint() {
                 "Authorization": "Bearer " + token
             },
             body: JSON.stringify({
-                user_id: Number(adminId),
+                user_id: Number(userId),
                 huella_id: huellaId
             })
         });
@@ -286,7 +286,7 @@ async function registerAdminFingerprint() {
             title: 'REGISTRO DE HUELLA',
             html: `
                 <div style="text-align: left; font-size: 14px;">
-                    <p><strong>Administrador:</strong> ID ${adminId}</p>
+                    <p><strong>Administrador:</strong> ID ${userId}</p>
                     <p><strong>Huella ID Asignado:</strong> ${huellaId}</p>
                     <p style="color: green;">✅ Preparado para registro físico</p>
                     <hr>
@@ -308,7 +308,7 @@ async function registerAdminFingerprint() {
         if (!confirmResult.isConfirmed) return;
 
         // 5. Enviar comando al ESP32
-        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, adminId, true);
+        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, userId, true);
         
         if (!commandResponse || commandResponse.status !== 'success') {
             throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
@@ -327,7 +327,7 @@ async function registerAdminFingerprint() {
                     </div>
                     <p style="margin-top: 15px;">Esperando registro físico...</p>
                     <p><small>Huella ID: ${huellaId}</small></p>
-                    <p><small>Administrador ID: ${adminId}</small></p>
+                    <p><small>Administrador ID: ${userId}</small></p>
                     <div id="fingerprint-progress" style="margin-top: 15px; font-size: 12px;">
                         Tiempo: 0/${maxChecks} segundos
                     </div>
@@ -443,52 +443,35 @@ async function registerAdminFingerprint() {
     }
 }
 // ========== FUNCIÓN QUE FALTA (Añade esto) ==========
-async function sendCommandToESP32DirectBrowser(command, huellaId = null, userId = null) {
+// REEMPLAZAR la función sendCommandToESP32Direct con esta versión
+async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
         throw new Error('IP del ESP32 no configurada');
     }
 
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const url = `http://${esp32IP}/command`;
-        console.log("Enviando comando a:", url);
+    console.log(`Enviando comando ${command} al ESP32 ${esp32IP} via proxy...`);
+    
+    try {
+        // Siempre usar proxy - evita problemas de Mixed Content
+        console.log("Usando proxy...");
+        const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
+        console.log("✓ Proxy exitoso:", proxyResult);
+        return proxyResult;
         
-        xhr.timeout = 15000;
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
+    } catch (proxyError) {
+        console.error("✗ Proxy falló:", proxyError.message);
         
-        const payload = {
-            command: command,
-            timestamp: Date.now()
-        };
-        
-        if (huellaId) payload.huella_id = huellaId;
-        if (userId) payload.user_id = userId;
-        
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    const data = JSON.parse(xhr.responseText);
-                    resolve(data);
-                } catch (e) {
-                    resolve({ status: 'success', message: 'Comando enviado' });
-                }
-            } else {
-                reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
-            }
-        };
-        
-        xhr.onerror = function() {
-            reject(new Error('Error de conexión con el ESP32'));
-        };
-        
-        xhr.ontimeout = function() {
-            reject(new Error('Timeout - El ESP32 no respondió'));
-        };
-        
-        xhr.send(JSON.stringify(payload));
-    });
+        // Si el proxy falla, dar instrucciones claras
+        throw new Error(
+            `No se pudo conectar al ESP32.\n\n` +
+            `1. Verifique que el ESP32 esté encendido\n` +
+            `2. IP configurada: ${esp32IP}\n` +
+            `3. Pruebe acceder desde un navegador en su red local:\n` +
+            `   http://${esp32IP}/status\n\n` +
+            `Error del proxy: ${proxyError.message}`
+        );
+    }
 }
 async function registerAdminRFID() {
     try {
@@ -499,14 +482,14 @@ async function registerAdminRFID() {
         }
 
         const payload = decodeJWT(token);
-        const adminId = payload.sub;
+        const userId = payload.sub;
         
-        if (!adminId) {
+        if (!userId) {
             Toast.fire({ icon: 'error', title: 'No se pudo identificar al administrador' });
             return;
         }
 
-        console.log("Registrando RFID para admin ID:", adminId);
+        console.log("Registrando RFID para admin ID:", userId);
         
         // Verificar conexión
         await updateESP32Status();
@@ -517,7 +500,7 @@ async function registerAdminRFID() {
             title: 'REGISTRO DE RFID',
             html: `
                 <div style="text-align: left; font-size: 14px;">
-                    <p><strong>Administrador:</strong> ID ${adminId}</p>
+                    <p><strong>Administrador:</strong> ID ${userId}</p>
                     <p style="color: green;">✅ Preparado para lectura RFID</p>
                     <hr>
                     <p><strong>Instrucciones:</strong></p>
@@ -538,7 +521,7 @@ async function registerAdminRFID() {
         if (!confirmResult.isConfirmed) return;
 
         // 2. Enviar comando al ESP32 - USAR LA MISMA FUNCIÓN QUE PARA EMPLEADOS
-        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, adminId);
+        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, userId, true);
         
         if (!commandResponse || commandResponse.status !== 'success') {
             throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
@@ -556,7 +539,7 @@ async function registerAdminRFID() {
                         <span class="visually-hidden">Cargando...</span>
                     </div>
                     <p style="margin-top: 15px;">Acercar llavero RFID al dispositivo...</p>
-                    <p><small>Administrador ID: ${adminId}</small></p>
+                    <p><small>Administrador ID: ${userId}</small></p>
                     <div id="rfid-progress" style="margin-top: 15px; font-size: 12px;">
                         Tiempo: 0/${maxChecks} segundos
                     </div>
@@ -576,7 +559,7 @@ async function registerAdminRFID() {
                     // Verificar cada 3 segundos (igual que para empleados)
                     if (checkCount % 3 === 0) {
                         try {
-                            const userResponse = await fetch(`${BASE_URL}/users/${adminId}`, {
+                            const userResponse = await fetch(`${BASE_URL}/users/${userId}`, {
                                 headers: { "Authorization": "Bearer " + token }
                             });
                             
