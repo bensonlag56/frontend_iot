@@ -723,53 +723,38 @@ async function testESP32Connection() {
 }
 
 // ========== FUNCIONES PARA ENVIAR COMANDOS AL ESP32 ==========
-async function sendCommandToESP32FromBrowser(command, huellaId = null, userId = null) {
+async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
         throw new Error('IP del ESP32 no configurada');
     }
 
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
+    console.log(`Enviando comando ${command} al ESP32 ${esp32IP}...`);
+    
+    try {
+        // SIEMPRE usar proxy para evitar problemas de Mixed Content
+        console.log("Usando proxy para evitar Mixed Content...");
+        const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
+        console.log("✓ Comando enviado via proxy:", proxyResult);
+        return proxyResult;
         
-        const url = `http://${esp32IP}/command`;
-        console.log("Enviando comando a:", url);
+    } catch (proxyError) {
+        console.error("✗ Proxy falló:", proxyError.message);
         
-        xhr.timeout = 15000;
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        
-        const payload = {
-            command: command,
-            timestamp: Date.now()
-        };
-        
-        if (huellaId) payload.huella_id = huellaId;
-        if (userId) payload.user_id = userId;
-        
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    const data = JSON.parse(xhr.responseText);
-                    resolve(data);
-                } catch (e) {
-                    resolve({ status: 'success', message: 'Comando enviado' });
-                }
-            } else {
-                reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
-            }
-        };
-        
-        xhr.onerror = function() {
-            reject(new Error('Error de conexión con el ESP32'));
-        };
-        
-        xhr.ontimeout = function() {
-            reject(new Error('Timeout - El ESP32 no respondió'));
-        };
-        
-        xhr.send(JSON.stringify(payload));
-    });
+        // Si el proxy falla, mostrar mensaje específico para admin
+        if (isAdmin) {
+            throw new Error(
+                `No se pudo conectar al ESP32 para registro de Administrador.\n\n` +
+                `REQUISITOS PARA ADMIN DESDE INTERNET:\n` +
+                `1. El ESP32 debe estar en una red con acceso a Internet\n` +
+                `2. El backend debe poder comunicarse con el ESP32\n` +
+                `3. Si el ESP32 está en red local, necesita túnel o VPN\n\n` +
+                `Error: ${proxyError.message}`
+            );
+        } else {
+            throw proxyError;
+        }
+    }
 }
 
 async function sendCommandViaProxy(command, huellaId = null, userId = null) {
