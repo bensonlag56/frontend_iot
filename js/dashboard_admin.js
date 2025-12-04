@@ -990,7 +990,7 @@ function renderAccessLogsTable(logs) {
             <td>
                 <div style="font-weight: 500;">${localTime}</div>
                 <small style="color: #666;">
-                    <i class="fas fa-clock"></i> ${formatRelativeTime(log.timestamp)}
+                    Hace ${calculateExactTimeDifference(log.timestamp)}
                 </small>
             </td>
             <td>
