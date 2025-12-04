@@ -442,37 +442,7 @@ async function registerAdminFingerprint() {
         });
     }
 }
-// ========== FUNCIÓN QUE FALTA (Añade esto) ==========
-// REEMPLAZAR la función sendCommandToESP32Direct con esta versión
-async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) {
-        throw new Error('IP del ESP32 no configurada');
-    }
 
-    console.log(`Enviando comando ${command} al ESP32 ${esp32IP} via proxy...`);
-    
-    try {
-        // Siempre usar proxy - evita problemas de Mixed Content
-        console.log("Usando proxy...");
-        const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
-        console.log("✓ Proxy exitoso:", proxyResult);
-        return proxyResult;
-        
-    } catch (proxyError) {
-        console.error("✗ Proxy falló:", proxyError.message);
-        
-        // Si el proxy falla, dar instrucciones claras
-        throw new Error(
-            `No se pudo conectar al ESP32.\n\n` +
-            `1. Verifique que el ESP32 esté encendido\n` +
-            `2. IP configurada: ${esp32IP}\n` +
-            `3. Pruebe acceder desde un navegador en su red local:\n` +
-            `   http://${esp32IP}/status\n\n` +
-            `Error del proxy: ${proxyError.message}`
-        );
-    }
-}
 async function registerAdminRFID() {
     try {
         const token = localStorage.getItem("jwtToken");
