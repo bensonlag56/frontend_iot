@@ -308,7 +308,7 @@ async function registerAdminFingerprint() {
         if (!confirmResult.isConfirmed) return;
 
         // 5. Enviar comando al ESP32
-        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, adminId);
+        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, adminId, true);
         
         if (!commandResponse || commandResponse.status !== 'success') {
             throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
@@ -807,7 +807,7 @@ async function sendCommandViaProxy(command, huellaId = null, userId = null) {
     }
 }
 
-async function sendCommandToESP32Direct(command, huellaId = null, userId = null) {
+async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
         throw new Error('IP del ESP32 no configurada');
@@ -816,8 +816,8 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null)
     console.log(`Enviando comando ${command} al ESP32 ${esp32IP}...`);
     
     try {
-        // Primero intentar conexión directa
-        console.log("1. Intentando conexión directa...");
+        // Primero intentar conexión directa desde el navegador
+        console.log("1. Intentando conexión directa desde navegador...");
         const result = await sendCommandToESP32FromBrowser(command, huellaId, userId);
         console.log("✓ Conexión directa exitosa:", result);
         return result;
@@ -825,7 +825,20 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null)
     } catch (directError) {
         console.log("✗ Conexión directa falló:", directError.message);
         
-        // Si falla, intentar via proxy
+        // Si es para admin, NO usar proxy
+        if (isAdmin) {
+            throw new Error(
+                `No se pudo conectar al ESP32 para registro de Administrador.\n\n` +
+                `REQUISITOS PARA ADMIN:\n` +
+                `1. Debe acceder desde la MISMA red WiFi que el ESP32\n` +
+                `2. Use HTTP (no HTTPS) para acceder localmente\n` +
+                `3. URL local: http://localhost:5500 (si usa VS Code Live Server)\n` +
+                `4. O use: http://192.168.1.xxx (su IP local)\n\n` +
+                `Error: ${directError.message}`
+            );
+        }
+        
+        // Si NO es admin, intentar proxy (para empleados desde internet)
         console.log("2. Intentando conexión via proxy...");
         try {
             const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
@@ -833,7 +846,6 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null)
         } catch (proxyError) {
             console.log("✗ Proxy también falló:", proxyError.message);
             
-            // Si ambos fallan, mostrar error
             throw new Error(
                 `No se pudo conectar al ESP32.\n\n` +
                 `Conexión directa: ${directError.message}\n` +
@@ -848,7 +860,7 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null)
     }
 }
 
-// ========== FUNCIONES PARA EMPLEADOS (IGUAL QUE ANTES) ==========
+
 function initializeEmployeeRegistration() {
     const btnSaveEmployee = document.getElementById("btn-save-employee");
     if (btnSaveEmployee) {
@@ -1051,7 +1063,7 @@ async function registerFingerprint(userId) {
         if (!confirmResult.isConfirmed) return;
 
         // Enviar comando
-        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, userId);
+        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, userId,);
         
         if (!commandResponse || commandResponse.status !== 'success') {
             throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
@@ -1214,7 +1226,7 @@ async function registerRFID(userId) {
         if (!confirmResult.isConfirmed) return;
 
         // Enviar comando
-        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, userId);
+        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, userId, true);
         
         if (!commandResponse || commandResponse.status !== 'success') {
             throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
