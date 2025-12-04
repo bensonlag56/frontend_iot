@@ -978,7 +978,20 @@ function renderAccessLogsTable(logs) {
         let accessMethod = log.access_method || 'Desconocido';
         const userName = log.user_name || `Usuario ${log.user_id}`;
         const userUsername = log.user_username || 'N/A';
-        const localTime = log.local_time || 'N/A';
+        
+        // Usar local_time si existe, sino usar timestamp
+        const displayTime = log.local_time || log.timestamp || 'N/A';
+        
+        // DEBUG para el primer registro
+        if (log.id === logs[0].id) {
+            console.log("DEBUG - Primer registro:", {
+                id: log.id,
+                timestamp: log.timestamp,
+                local_time: log.local_time,
+                displayTime: displayTime,
+                calculated: calculateExactTimeDifference(displayTime)
+            });
+        }
 
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -988,9 +1001,9 @@ function renderAccessLogsTable(logs) {
                 <small style="color: #666;">ID: ${log.user_id} | @${userUsername}</small>
             </td>
             <td>
-                <div style="font-weight: 500;">${localTime}</div>
+                <div style="font-weight: 500;">${displayTime}</div>
                 <small style="color: #666;">
-                     ${calculateExactTimeDifference(log.timestamp)}
+                     ${calculateExactTimeDifference(displayTime)}
                 </small>
             </td>
             <td>
@@ -1054,56 +1067,95 @@ function convertToPeruTime(timestamp) {
     return new Date(utc + peruOffset);
 }
 
-function calculateExactTimeDifference(localTimeStr) {
-    if (!localTimeStr || localTimeStr === "N/A") return "N/A";
+function calculateExactTimeDifference(timeStr) {
+    if (!timeStr || timeStr === "N/A") return "N/A";
 
     try {
-        // Parsear la fecha/hora local (ya está en formato Perú)
-        // Formato: "2025-12-04 18:04:54"
-        const [datePart, timePart] = localTimeStr.split(" ");
-        const [year, month, day] = datePart.split("-").map(Number);
-        const [hour, minute, second] = timePart.split(":").map(Number);
+        let logDate;
+        let isUTCTime = false;
         
-        // Crear fecha en hora de Perú (formato local)
-        // NOTA: Cuando creamos una fecha sin especificar zona horaria, JavaScript usa la zona horaria LOCAL del navegador
-        const logDate = new Date(year, month - 1, day, hour, minute, second);
+        // DEBUG
+        console.log("Timestamp recibido:", timeStr);
         
-        // Obtener hora actual CORRECTA en Perú
-        // Método 1: Usar API de zona horaria
-        const nowPeru = new Date().toLocaleString("en-US", { timeZone: "America/Lima" });
-        const peruNow = new Date(nowPeru);
-        
-        // Método alternativo: Calcular offset manualmente (Perú es UTC-5)
-        const utcNow = new Date();
-        const peruOffset = -5 * 60; // Perú es UTC-5 en minutos
-        const peruNowManual = new Date(utcNow.getTime() + peruOffset * 60000);
-        
-        // Usar el método más confiable
-        const referenceNow = peruNow;
-        
-        // Calcular diferencia en milisegundos
-        const diffMs = referenceNow - logDate;
-        
-        console.log("DEBUG tiempo:", {
-            localTimeStr,
-            logDate: logDate.toString(),
-            peruNow: referenceNow.toString(),
-            diffMs: diffMs,
-            diffHours: Math.floor(diffMs / 3600000)
-        });
-        
-        // Si la diferencia es negativa (menos de 1 minuto), mostrar "Justo ahora"
-        if (diffMs < 0) {
-            return "Justo ahora";
+        // Determinar el formato del timestamp
+        if (timeStr.includes("T") && timeStr.includes(".")) {
+            // Formato ISO: "2025-12-04T23:04:54.871349" (UTC)
+            logDate = new Date(timeStr);
+            isUTCTime = true;
+            console.log("Detectado formato ISO (UTC)");
+        } else if (timeStr.includes("T")) {
+            // Formato ISO sin milisegundos: "2025-12-04T23:04:54"
+            logDate = new Date(timeStr);
+            isUTCTime = true;
+            console.log("Detectado formato ISO simple (UTC)");
+        } else if (timeStr.includes(" ")) {
+            // Formato simple: "2025-12-04 18:04:54" (hora local Perú)
+            logDate = new Date(timeStr.replace(" ", "T") + "-05:00");
+            console.log("Detectado formato simple (Perú)");
+        } else {
+            // Formato desconocido, intentar parsear
+            logDate = new Date(timeStr);
+            console.log("Formato desconocido, intentando parseo directo");
         }
         
-        // Calcular diferencias
+        // Verificar si la fecha es válida
+        if (isNaN(logDate.getTime())) {
+            console.error("Fecha inválida:", timeStr);
+            return "N/A";
+        }
+        
+        // Si es hora UTC, convertir a Perú (UTC-5)
+        if (isUTCTime) {
+            const peruOffset = -5 * 60 * 60000; // -5 horas en milisegundos
+            logDate = new Date(logDate.getTime() + peruOffset);
+            console.log("Convertido UTC a Perú:", logDate.toISOString());
+        }
+        
+        // Obtener hora actual en Perú
+        const now = new Date();
+        
+        // Ajustar hora actual a Perú si es necesario
+        // Perú es UTC-5 (300 minutos)
+        const browserOffset = now.getTimezoneOffset(); // minutos
+        const peruOffset = 300; // UTC-5 = +300 minutos
+        
+        let peruNow;
+        if (browserOffset !== peruOffset) {
+            // Ajustar al offset de Perú
+            const offsetDiff = (peruOffset - browserOffset) * 60000;
+            peruNow = new Date(now.getTime() + offsetDiff);
+        } else {
+            peruNow = now;
+        }
+        
+        console.log("Hora registro (Perú):", logDate.toISOString());
+        console.log("Hora actual (Perú):", peruNow.toISOString());
+        
+        // Calcular diferencia
+        const diffMs = peruNow - logDate;
+        
+        console.log("Diferencia (ms):", diffMs);
+        
+        // Si la diferencia es negativa o muy pequeña (por ajustes de tiempo)
+        if (diffMs < 0) {
+            // Verificar si es solo una pequeña diferencia
+            if (Math.abs(diffMs) < 30000) { // Menos de 30 segundos
+                return "Justo ahora";
+            }
+            // Fecha en el futuro (error de zona horaria)
+            return "Recientemente";
+        }
+        
+        // Convertir a unidades legibles
         const diffSeconds = Math.floor(diffMs / 1000);
         const diffMinutes = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
         
-        // Mostrar formato apropiado
+        // DEBUG: Mostrar cálculo
+        console.log(`Diferencias: ${diffDays}d ${diffHours}h ${diffMinutes}m ${diffSeconds}s`);
+        
+        // Formatear resultado
         if (diffDays >= 1) {
             if (diffDays === 1) {
                 const remainingHours = Math.floor((diffMs % 86400000) / 3600000);
@@ -1111,12 +1163,11 @@ function calculateExactTimeDifference(localTimeStr) {
                     return `Hace 1 día ${remainingHours}h`;
                 }
                 return "Hace 1 día";
-            } else {
-                return `Hace ${diffDays} días`;
             }
+            return `Hace ${diffDays} días`;
         } else if (diffHours >= 1) {
             const remainingMinutes = Math.floor((diffMs % 3600000) / 60000);
-            if (remainingMinutes > 0 && diffHours < 24) {
+            if (remainingMinutes > 0 && diffHours < 5) {
                 return `Hace ${diffHours}h ${remainingMinutes}m`;
             }
             return `Hace ${diffHours}h`;
@@ -1127,39 +1178,10 @@ function calculateExactTimeDifference(localTimeStr) {
         } else {
             return "Justo ahora";
         }
-
-    } catch (e) {
-        console.error("Error calculando diferencia:", e, "LocalTime:", localTimeStr);
         
-        // Método alternativo más simple y confiable
-        try {
-            // Crear fecha con zona horaria explícita (Perú UTC-5)
-            const logDateStr = localTimeStr.replace(" ", "T") + "-05:00";
-            const logDate = new Date(logDateStr);
-            
-            // Hora actual en UTC
-            const utcNow = new Date();
-            
-            // Convertir a Perú (UTC-5)
-            const peruOffset = -5 * 60 * 60000; // -5 horas en milisegundos
-            const peruNow = new Date(utcNow.getTime() + peruOffset);
-            
-            const diffMs = peruNow - logDate;
-            const diffMinutes = Math.floor(diffMs / 60000);
-            
-            if (diffMinutes < 1) return "Justo ahora";
-            if (diffMinutes < 60) return `Hace ${diffMinutes}m`;
-            
-            const diffHours = Math.floor(diffMinutes / 60);
-            if (diffHours < 24) return `Hace ${diffHours}h`;
-            
-            const diffDays = Math.floor(diffHours / 24);
-            return diffDays === 1 ? "Hace 1 día" : `Hace ${diffDays} días`;
-            
-        } catch (e2) {
-            console.error("Error en método alternativo:", e2);
-            return "N/A";
-        }
+    } catch (e) {
+        console.error("Error calculando diferencia:", e, "Timestamp:", timeStr);
+        return "N/A";
     }
 }
 async function showAccessDetails(logId) {
