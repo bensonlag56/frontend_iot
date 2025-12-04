@@ -705,7 +705,7 @@ async function sendAdminCommandToESP32(command, huellaId = null, userId = null) 
     } catch (directError) {
         console.log("[ADMIN] ✗ Conexión directa falló:", directError.message);
         
-        // SEGUNDO intentar con timeout más largo
+
         try {
             console.log("[ADMIN] 2. Intentando con XMLHttpRequest...");
             const result = await sendCommandToESP32(command, huellaId, userId);
@@ -713,7 +713,7 @@ async function sendAdminCommandToESP32(command, huellaId = null, userId = null) 
         } catch (xhrError) {
             console.log("[ADMIN] ✗ XMLHttpRequest también falló:", xhrError.message);
             
-            // TERCERO intentar via proxy (igual que para empleados)
+
             try {
                 console.log("[ADMIN] 3. Intentando via proxy...");
                 const proxyResult = await sendCommandViaProxy(command, huellaId, userId);

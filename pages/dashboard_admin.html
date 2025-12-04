@@ -317,6 +317,105 @@
         </table>
       </section>
 
+<!-- ============= -->
+<!-- REPORTES DE ACCESO -->
+<!-- ============= -->
+<section id="section-access-reports" class="pane" style="display:none;">
+  <h2>Reportes de Acceso</h2>
+
+  <div class="filters" style="margin-bottom: 15px; display:flex; gap:10px; flex-wrap:wrap;">
+    <div>
+      <label>Empleado:</label>
+      <select id="accessUserSelect" class="form-control">
+        <option value="">Todos los empleados</option>
+      </select>
+    </div>
+    <div>
+      <label>Sensor:</label>
+      <select id="accessSensorSelect" class="form-control">
+        <option value="">Todos</option>
+        <option value="Huella">Huella</option>
+        <option value="RFID">RFID</option>
+        <option value="ZonaSegura">Zona Segura</option>
+      </select>
+    </div>
+    <div>
+      <label>Estado:</label>
+      <select id="accessStatusSelect" class="form-control">
+        <option value="">Todos</option>
+        <option value="Permitido">Permitido</option>
+        <option value="Denegado">Denegado</option>
+      </select>
+    </div>
+    <div>
+      <label>Desde:</label>
+      <input type="datetime-local" id="accessStart" class="form-control">
+    </div>
+    <div>
+      <label>Hasta:</label>
+      <input type="datetime-local" id="accessEnd" class="form-control">
+    </div>
+    <div>
+      <label>Tipo de Acción:</label>
+      <select id="accessActionType" class="form-control">
+        <option value="">Todos</option>
+        <option value="ENTRADA">ENTRADA</option>
+        <option value="SALIDA">SALIDA</option>
+        <option value="ACCESO_ZONA_SEGURA">Zona Segura</option>
+      </select>
+    </div>
+
+    <button id="btnLoadAccessLogs" class="btn primary">Buscar</button>
+    <button id="btnExportAccessCSV" class="btn secondary">Exportar CSV</button>
+  </div>
+
+  <div class="summary-cards" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <div class="card" style="padding: 15px; background: #e7f3ff; border-radius: 8px; min-width: 150px;">
+      <h4>Total Accesos</h4>
+      <p id="totalAccessCount" style="font-size: 24px; font-weight: bold;">0</p>
+    </div>
+    <div class="card" style="padding: 15px; background: #d4edda; border-radius: 8px; min-width: 150px;">
+      <h4>Permitidos</h4>
+      <p id="allowedAccessCount" style="font-size: 24px; font-weight: bold;">0</p>
+    </div>
+    <div class="card" style="padding: 15px; background: #f8d7da; border-radius: 8px; min-width: 150px;">
+      <h4>Denegados</h4>
+      <p id="deniedAccessCount" style="font-size: 24px; font-weight: bold;">0</p>
+    </div>
+    <div class="card" style="padding: 15px; background: #fff3cd; border-radius: 8px; min-width: 150px;">
+      <h4>Huellas</h4>
+      <p id="fingerprintAccessCount" style="font-size: 24px; font-weight: bold;">0</p>
+    </div>
+    <div class="card" style="padding: 15px; background: #e2e3e5; border-radius: 8px; min-width: 150px;">
+      <h4>RFID</h4>
+      <p id="rfidAccessCount" style="font-size: 24px; font-weight: bold;">0</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Empleado</th>
+          <th>Fecha/Hora</th>
+          <th>Sensor</th>
+          <th>Estado</th>
+          <th>Método</th>
+          <th>Tipo</th>
+          <th>Motivo</th>
+          <th>Detalles</th>
+        </tr>
+      </thead>
+      <tbody id="accessLogTableBody"></tbody>
+    </table>
+  </div>
+
+  <div id="accessLogPagination" style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+
+  </div>
+</section>
+
       <!-- ============= -->
       <!-- CONTROL ESP32 -->
       <!-- ============= -->
