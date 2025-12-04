@@ -1079,17 +1079,30 @@ async function updateESP32Status() {
 
     try {
         const esp32Url = getESP32Url();
+        const isHttps = window.location.protocol === 'https:';
+        
         if (!esp32Url) {
-            statusElement.innerHTML = 'URL no configurada<br>Configure IP o Ngrok';
-            statusElement.className = 'status-box status-offline';
+            if (isHttps) {
+                statusElement.innerHTML = 'Modo HTTPS activado<br>Configure Ngrok';
+                statusElement.className = 'status-box status-offline';
+            } else {
+                statusElement.innerHTML = 'URL no configurada<br>Configure IP o Ngrok';
+                statusElement.className = 'status-box status-offline';
+            }
             return;
         }
 
         // Mostrar modo actual
         const isNgrok = esp32Url.startsWith('https://');
-        const modeText = isNgrok ? 'NGROK' : 'LOCAL';
+        const modeText = isNgrok ? 'NGROK (Internet)' : 'LOCAL (Red WiFi)';
         
-        const response = await fetch(`${esp32Url}/status`);
+        // Intentar conexión
+        const response = await fetch(`${esp32Url}/status`, {
+            mode: 'cors', // Permitir CORS para ngrok
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
         
         if (response.ok) {
             const data = await response.json();
@@ -1103,7 +1116,7 @@ async function updateESP32Status() {
 
             if (infoElement) {
                 infoElement.innerHTML = `
-                    <p><strong>Conexión:</strong> ${isNgrok ? 'Ngrok (Internet)' : 'Local (Red WiFi)'}</p>
+                    <p><strong>Conexión:</strong> ${modeText}</p>
                     <p><strong>IP:</strong> ${data.ip}</p>
                     <p><strong>Registro activo:</strong> ${data.registro_activo ? 'Sí' : 'No'}</p>
                     <p><strong>RFID activo:</strong> ${data.lectura_rfid_activa ? 'Sí' : 'No'}</p>
@@ -1114,9 +1127,13 @@ async function updateESP32Status() {
         }
         
     } catch (error) {
+        const esp32Url = getESP32Url();
+        const isNgrok = esp32Url && esp32Url.startsWith('https://');
+        
         statusElement.innerHTML =
             ` ESP32 DESCONECTADO<br>` +
-            `Error: ${error.message}`;
+            ` Modo: ${isNgrok ? 'Ngrok' : 'Local'}<br>` +
+            ` Error: ${error.message}`;
         statusElement.className = 'status-box status-offline';
     }
 }
@@ -2011,6 +2028,15 @@ async function loadAttendanceSummary() {
     }
 }
 document.addEventListener("DOMContentLoaded", function () {
+    // Detectar modo de conexión
+    const isHttps = window.location.protocol === 'https:';
+    
+    if (isHttps) {
+        console.log('Modo HTTPS detectado - Usando Ngrok');
+        // Forzar uso de ngrok en HTTPS
+        localStorage.setItem('use_ngrok', 'true');
+    }
+    
     const savedIP = localStorage.getItem('esp32_ip');
     if (savedIP) {
         ESP32_BASE_URL = `http://${savedIP}`;
@@ -2020,6 +2046,30 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    // Mostrar advertencia si es HTTPS sin ngrok
+    if (isHttps && !localStorage.getItem('ngrok_url')) {
+        setTimeout(() => {
+            Swal.fire({
+                icon: 'info',
+                title: 'Modo Internet Activado',
+                html: `
+                    <div style="text-align: left;">
+                        <p>Estás accediendo desde internet (HTTPS).</p>
+                        <p>Para conectar con tu ESP32 necesitas:</p>
+                        <ol>
+                            <li>Configurar Ngrok en el ESP32</li>
+                            <li>Ingresar la URL HTTPS proporcionada</li>
+                        </ol>
+                        <button onclick="configureNgrok()" class="btn btn-primary mt-3">
+                            Configurar Ngrok Ahora
+                        </button>
+                    </div>
+                `,
+                width: 500
+            });
+        }, 1000);
+    }
+
     initializeNavigation();
     initializeEmployeeRegistration();
     initializeSchedules();
@@ -2027,6 +2077,7 @@ document.addEventListener("DOMContentLoaded", function () {
     loadUsersForAttendance();
     loadAttendanceSummary();
     setInterval(updateESP32Status, 30000);
+    
     if (document.getElementById("section-admin-registration") && 
         document.getElementById("section-admin-registration").style.display === "block") {
         loadAdminInfo();
@@ -2049,6 +2100,9 @@ async function sendCommandToESP32FromBrowser(command, huellaId = null, userId = 
         xhr.timeout = 15000;
         xhr.open('POST', url, true);
         xhr.setRequestHeader('Content-Type', 'application/json');
+        
+        // Si es Ngrok (HTTPS), no necesitamos hacer nada especial
+        // Si es HTTP local, el navegador permitirá la solicitud
         
         const payload = {
             command: command,
@@ -2082,7 +2136,6 @@ async function sendCommandToESP32FromBrowser(command, huellaId = null, userId = 
         xhr.send(JSON.stringify(payload));
     });
 }
-
 function configureNgrok() {
     const currentNgrokUrl = localStorage.getItem('ngrok_url') || '';
     const useNgrok = localStorage.getItem('use_ngrok') === 'true';
@@ -2123,12 +2176,60 @@ function getESP32Url() {
     const useNgrok = localStorage.getItem('use_ngrok') === 'true';
     const ngrokUrl = localStorage.getItem('ngrok_url');
     
-    if (useNgrok && ngrokUrl) {
-        return ngrokUrl; 
-    } else if (esp32IP) {
-        return `http://${esp32IP}`;
+    // Si estamos en HTTPS (Render.com) y no hay ngrok configurado
+    const isHttps = window.location.protocol === 'https:';
+    
+    if (isHttps) {
+        // Desde HTTPS, solo podemos usar Ngrok
+        if (useNgrok && ngrokUrl) {
+            return ngrokUrl;
+        } else {
+            console.warn('Desde HTTPS solo se puede usar Ngrok. Configura Ngrok o accede desde HTTP local.');
+            return null;
+        }
+    } else {
+        // Desde HTTP local, podemos usar IP local
+        if (useNgrok && ngrokUrl) {
+            return ngrokUrl; // Opcional: usar ngrok también desde local
+        } else if (esp32IP) {
+            return `http://${esp32IP}`;
+        }
+        return null;
     }
-    return null;
+}
+function detectConnectionMode() {
+    const isHttps = window.location.protocol === 'https:';
+    const hasNgrok = localStorage.getItem('ngrok_url');
+    
+    if (isHttps && !hasNgrok) {
+        // Estamos en producción (HTTPS) sin ngrok configurado
+        Swal.fire({
+            icon: 'warning',
+            title: 'Configuración Requerida',
+            html: `
+                <div style="text-align: left;">
+                    <p>Estás accediendo desde HTTPS pero no tienes Ngrok configurado.</p>
+                    <p><strong>Opciones:</strong></p>
+                    <ol>
+                        <li>Configurar Ngrok para acceso remoto</li>
+                        <li>Acceder localmente usando HTTP</li>
+                    </ol>
+                </div>
+            `,
+            confirmButtonText: 'Configurar Ngrok',
+            cancelButtonText: 'Usar Localmente',
+            showCancelButton: true
+        }).then((result) => {
+            if (result.isConfirmed) {
+                configureNgrok();
+            } else {
+                // Cambiar a modo local (necesitará acceder por HTTP)
+                window.location.href = window.location.href.replace('https://', 'http://');
+            }
+        });
+        return false;
+    }
+    return true;
 }
 async function testNgrokConnection(ngrokUrl) {
     try {
