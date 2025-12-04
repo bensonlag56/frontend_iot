@@ -733,6 +733,362 @@ async function sendAdminCommandToESP32(command, huellaId = null, userId = null) 
         }
     }
 }
+async function loadAccessReports(page = 1) {
+    try {
+        // Obtener valores de los filtros
+        const userId = document.getElementById('accessUserSelect').value || '';
+        const sensorType = document.getElementById('accessSensorSelect').value || '';
+        const status = document.getElementById('accessStatusSelect').value || '';
+        const actionType = document.getElementById('accessActionType').value || '';
+        const startDate = document.getElementById('accessStart').value || '';
+        const endDate = document.getElementById('accessEnd').value || '';
+        
+        // Construir URL con parámetros
+        let url = `${API_BASE_URL}/access/admin/reports?page=${page}`;
+        if (userId) url += `&user_id=${userId}`;
+        if (sensorType) url += `&sensor_type=${sensorType}`;
+        if (status) url += `&status=${status}`;
+        if (actionType) url += `&action_type=${actionType}`;
+        if (startDate) url += `&start_date=${new Date(startDate).toISOString()}`;
+        if (endDate) url += `&end_date=${new Date(endDate).toISOString()}`;
+        
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) throw new Error('Error al cargar reportes');
+        
+        const data = await response.json();
+        
+        // Actualizar estadísticas
+        updateAccessStatistics(data.statistics);
+        
+        // Actualizar tabla
+        renderAccessLogsTable(data.data);
+        
+        // Actualizar paginación
+        renderAccessPagination(data.pagination, page);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire('Error', 'No se pudieron cargar los reportes de acceso', 'error');
+    }
+}
+
+// Función para actualizar las estadísticas
+function updateAccessStatistics(stats) {
+    document.getElementById('totalAccessCount').textContent = stats.total || 0;
+    document.getElementById('allowedAccessCount').textContent = stats.allowed || 0;
+    document.getElementById('deniedAccessCount').textContent = stats.denied || 0;
+    document.getElementById('fingerprintAccessCount').textContent = stats.fingerprint || 0;
+    document.getElementById('rfidAccessCount').textContent = stats.rfid || 0;
+}
+
+// Función para renderizar la tabla de logs
+function renderAccessLogsTable(logs) {
+    const tbody = document.getElementById('accessLogTableBody');
+    tbody.innerHTML = '';
+    
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" style="text-align: center; padding: 20px;">
+                    No se encontraron registros de acceso
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    logs.forEach(log => {
+        // Determinar clase de estado
+        let statusClass = '';
+        if (log.status === 'Permitido') {
+            statusClass = 'status-success';
+        } else if (log.status === 'Denegado') {
+            statusClass = 'status-error';
+        }
+        
+        // Determinar ícono según sensor
+        let sensorIcon = '🟢';
+        if (log.sensor_type === 'Huella') sensorIcon = '👆';
+        else if (log.sensor_type === 'RFID') sensorIcon = '🪪';
+        else if (log.sensor_type === 'ZonaSegura') sensorIcon = '🔒';
+        
+        // Determinar ícono según tipo de acción
+        let actionIcon = '↔️';
+        if (log.action_type === 'ENTRADA') actionIcon = '⬇️';
+        else if (log.action_type === 'SALIDA') actionIcon = '⬆️';
+        else if (log.action_type.includes('ZONA SEGURA')) actionIcon = '🔐';
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${log.id}</td>
+            <td>
+                <strong>${log.user_name}</strong><br>
+                <small>@${log.user_username || 'N/A'}</small>
+            </td>
+            <td>
+                ${log.local_time}<br>
+                <small style="color: #666;">${formatRelativeTime(log.timestamp)}</small>
+            </td>
+            <td>${sensorIcon} ${log.sensor_type}</td>
+            <td>
+                <span class="status-badge ${statusClass}">
+                    ${log.status}
+                </span>
+            </td>
+            <td>
+                <small style="font-family: monospace;">${log.access_method}</small>
+            </td>
+            <td>
+                ${actionIcon} ${log.action_type}
+            </td>
+            <td>
+                ${log.reason || 'N/A'}
+            </td>
+            <td>
+                <button onclick="showAccessDetails(${log.id})" class="btn small">
+                    Detalles
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Función para renderizar paginación
+function renderAccessPagination(pagination, currentPage) {
+    const container = document.getElementById('accessLogPagination');
+    container.innerHTML = '';
+    
+    if (pagination.pages <= 1) return;
+    
+    // Botón anterior
+    if (currentPage > 1) {
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'btn small';
+        prevBtn.innerHTML = '&laquo; Anterior';
+        prevBtn.onclick = () => loadAccessReports(currentPage - 1);
+        container.appendChild(prevBtn);
+    }
+    
+    // Números de página
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(pagination.pages, currentPage + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.className = `btn small ${i === currentPage ? 'primary' : 'secondary'}`;
+        pageBtn.textContent = i;
+        pageBtn.onclick = () => loadAccessReports(i);
+        container.appendChild(pageBtn);
+    }
+    
+    // Botón siguiente
+    if (currentPage < pagination.pages) {
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'btn small';
+        nextBtn.innerHTML = 'Siguiente &raquo;';
+        nextBtn.onclick = () => loadAccessReports(currentPage + 1);
+        container.appendChild(nextBtn);
+    }
+}
+
+// Función para mostrar detalles de un acceso específico
+async function showAccessDetails(logId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/access/history?log_id=${logId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) throw new Error('Error al obtener detalles');
+        
+        const logs = await response.json();
+        const log = logs.find(l => l.id === logId) || logs[0];
+        
+        if (!log) {
+            Swal.fire('Error', 'No se encontró el registro', 'error');
+            return;
+        }
+        
+        // Formatear fecha
+        const date = new Date(log.timestamp);
+        const formattedDate = date.toLocaleString('es-ES', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        
+        // Crear contenido del modal
+        let detailsHtml = `
+            <div style="text-align: left; max-width: 500px;">
+                <h3>Detalles del Acceso</h3>
+                
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                    <p><strong>ID Registro:</strong> ${log.id}</p>
+                    <p><strong>Fecha/Hora:</strong> ${formattedDate}</p>
+                    <p><strong>Sensor:</strong> ${log.sensor_type}</p>
+                    <p><strong>Estado:</strong> 
+                        <span class="${log.status === 'Permitido' ? 'status-success' : 'status-error'}">
+                            ${log.status}
+                        </span>
+                    </p>
+                    <p><strong>Usuario ID:</strong> ${log.user_id}</p>
+        `;
+        
+        if (log.rfid) {
+            detailsHtml += `<p><strong>RFID:</strong> <code>${log.rfid}</code></p>`;
+        }
+        
+        if (log.huella_id) {
+            detailsHtml += `<p><strong>Huella ID:</strong> ${log.huella_id}</p>`;
+        }
+        
+        if (log.reason) {
+            detailsHtml += `<p><strong>Motivo/Detalles:</strong> ${log.reason}</p>`;
+        }
+        
+        detailsHtml += `</div>`;
+        
+        Swal.fire({
+            title: 'Información de Acceso',
+            html: detailsHtml,
+            icon: 'info',
+            confirmButtonText: 'Cerrar',
+            width: '600px'
+        });
+        
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire('Error', 'No se pudieron cargar los detalles', 'error');
+    }
+}
+
+// Función para exportar a CSV
+async function exportAccessCSV() {
+    try {
+        // Obtener valores de filtros
+        const userId = document.getElementById('accessUserSelect').value || '';
+        const sensorType = document.getElementById('accessSensorSelect').value || '';
+        const status = document.getElementById('accessStatusSelect').value || '';
+        const actionType = document.getElementById('accessActionType').value || '';
+        const startDate = document.getElementById('accessStart').value || '';
+        const endDate = document.getElementById('accessEnd').value || '';
+        
+        // Construir URL
+        let url = `${API_BASE_URL}/access/admin/reports/export`;
+        const params = new URLSearchParams();
+        
+        if (userId) params.append('user_id', userId);
+        if (sensorType) params.append('sensor_type', sensorType);
+        if (status) params.append('status', status);
+        if (actionType) params.append('action_type', actionType);
+        if (startDate) params.append('start_date', new Date(startDate).toISOString());
+        if (endDate) params.append('end_date', new Date(endDate).toISOString());
+        
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
+        
+        // Descargar el archivo
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) throw new Error('Error al exportar');
+        
+        // Crear blob y descargar
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `reporte_accesos_${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+        
+        Swal.fire('Éxito', 'Reporte exportado correctamente', 'success');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire('Error', 'No se pudo exportar el reporte', 'error');
+    }
+}
+
+// Función para cargar usuarios en el select
+async function loadAccessUsers() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) throw new Error('Error al cargar usuarios');
+        
+        const users = await response.json();
+        const select = document.getElementById('accessUserSelect');
+        
+        // Limpiar opciones excepto la primera
+        while (select.options.length > 1) {
+            select.remove(1);
+        }
+        
+        // Agregar usuarios
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.nombre} ${user.apellido} (${user.username})`;
+            select.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error al cargar usuarios:', error);
+    }
+}
+
+// Función auxiliar para formatear tiempo relativo
+function formatRelativeTime(timestamp) {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'hace unos segundos';
+    if (diffMins < 60) return `hace ${diffMins} min`;
+    if (diffHours < 24) return `hace ${diffHours} horas`;
+    if (diffDays < 7) return `hace ${diffDays} días`;
+    
+    return date.toLocaleDateString('es-ES');
+}
+
+// Inicializar cuando se carga la página
+document.addEventListener('DOMContentLoaded', function() {
+    // ... código existente ...
+    
+    // Agregar eventos para reportes de acceso
+    document.getElementById('btnLoadAccessLogs')?.addEventListener('click', () => loadAccessReports());
+    document.getElementById('btnExportAccessCSV')?.addEventListener('click', exportAccessCSV);
+    
+    // Configurar fecha por defecto (últimos 7 días)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+    
+    document.getElementById('accessStart').value = startDate.toISOString().slice(0, 16);
+    document.getElementById('accessEnd').value = endDate.toISOString().slice(0, 16);
+    
+    // Cargar lista de usuarios
+    loadAccessUsers();
+});
 
 function configureESP32IP() {
     const currentIP = localStorage.getItem('esp32_ip') || '192.168.1.108';
