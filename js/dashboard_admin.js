@@ -1032,13 +1032,20 @@ function calculateExactTimeDifference(timestamp) {
     if (!timestamp) return "N/A";
 
     try {
-        // Convertir a formato ISO válido
+        // Convertir timestamp a formato ISO correcto
         const fixedTimestamp = timestamp.replace(" ", "T");
 
-        const logDate = new Date(fixedTimestamp);
-        const now = new Date();
+        // Crear fecha original
+        const logDateLocal = new Date(fixedTimestamp);
 
-        let diffMs = now - logDate;
+        // Convertir fecha original a zona horaria de Perú (UTC-5)
+        const logDatePeru = new Date(logDateLocal.toLocaleString("en-US", { timeZone: "America/Lima" }));
+
+        // Obtener fecha actual en hora de Perú
+        const nowPeru = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Lima" }));
+
+        // Diferencia en milisegundos
+        let diffMs = nowPeru - logDatePeru;
         if (diffMs < 0) diffMs = 0;
 
         const diffMinutes = Math.floor(diffMs / 60000);
@@ -1060,6 +1067,7 @@ function calculateExactTimeDifference(timestamp) {
         return "N/A";
     }
 }
+
 
 async function showAccessDetails(logId) {
     try {
