@@ -1265,70 +1265,68 @@ async function loadAccessUsers() {
         console.error('Error al cargar usuarios:', error);
     }
 }
+// Convierte "2025-12-04 17:06:05" a Date en zona horaria -05:00
 function parseServerDate(dateStr) {
+    if (!dateStr) return null;
 
-    if (dateStr.includes("T")) return new Date(dateStr);
+    dateStr = dateStr.trim();
 
+    // Si viene en formato ISO
+    if (dateStr.includes("T")) {
+        return new Date(dateStr);
+    }
 
+    // Si viene como "YYYY-MM-DD HH:MM:SS"
     return new Date(dateStr.replace(" ", "T") + "-05:00");
 }
+
+// Genera "hace X minutos / horas / días"
 function formatRelativeTime(timestamp) {
-    if (!timestamp) return '';
+    if (!timestamp) return "";
 
-    try {
-        let date;
+    let date;
 
-        if (typeof timestamp === 'string') {
-            timestamp = timestamp.trim();
-
-            if (!timestamp) return '';
-
-            // ¿Viene como 2025-12-04 17:06:05 ?
-            if (timestamp.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-                // Interpretar como hora local del servidor (Perú -05:00)
-                date = new Date(timestamp.replace(" ", "T") + "-05:00");
-            }
-            else if (/^\d+$/.test(timestamp)) {
-                const num = parseInt(timestamp);
-                if (num === 0) return '';
-                date = new Date(num);
-            }
-            else {
-                // ISO o cualquier otro formato
-                date = new Date(timestamp);
-            }
-        } 
-        else if (typeof timestamp === 'number') {
-            if (timestamp === 0) return '';
+    // Convertir string a Date
+    if (typeof timestamp === "string") {
+        // Si es formato "2025-12-04 17:06:05"
+        if (timestamp.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+            date = parseServerDate(timestamp);
+        }
+        // Si es numérico (timestamp)
+        else if (/^\d+$/.test(timestamp)) {
+            date = new Date(parseInt(timestamp));
+        }
+        else {
+            // ISO u otros formatos válidos
             date = new Date(timestamp);
         }
-
-        if (!date || isNaN(date.getTime())) return '';
-
-        const now = new Date();
-        const diffMs = now - date;
-
-        if (diffMs < 0) return date.toLocaleString('es-ES');
-
-        const sec = Math.floor(diffMs / 1000);
-        const min = Math.floor(sec / 60);
-        const hrs = Math.floor(min / 60);
-        const days = Math.floor(hrs / 24);
-
-        if (sec < 60) return 'hace unos segundos';
-        if (min < 60) return min === 1 ? 'hace 1 minuto' : `hace ${min} minutos`;
-        if (hrs < 24) return hrs === 1 ? 'hace 1 hora' : `hace ${hrs} horas`;
-        if (days < 7) return days === 1 ? 'hace 1 día' : `hace ${days} días`;
-
-        return date.toLocaleDateString('es-ES');
-
-    } catch (e) {
-        console.error('Error al formatear:', e, timestamp);
-        return '';
     }
+    else if (typeof timestamp === "number") {
+        date = new Date(timestamp);
+    }
+
+    if (!date || isNaN(date.getTime())) return "";
+
+    const now = new Date();
+    const diffMs = now - date;
+
+    if (diffMs < 0) {
+        return date.toLocaleString("es-ES");
+    }
+
+    const sec = Math.floor(diffMs / 1000);
+    const min = Math.floor(sec / 60);
+    const hrs = Math.floor(min / 60);
+    const days = Math.floor(hrs / 24);
+
+    if (sec < 60) return "hace unos segundos";
+    if (min < 60) return min === 1 ? "hace 1 minuto" : `hace ${min} minutos`;
+    if (hrs < 24) return hrs === 1 ? "hace 1 hora" : `hace ${hrs} horas`;
+    if (days < 7) return days === 1 ? "hace 1 día" : `hace ${days} días`;
+
+    return date.toLocaleDateString("es-ES");
 }
 
-// Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
     // ... código existente ...
     
