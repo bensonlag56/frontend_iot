@@ -921,22 +921,22 @@ function renderAccessLogsTable(logs) {
         // Determinar ícono según sensor
         let sensorIcon = '🔍';
         let sensorText = log.sensor_type || 'Desconocido';
-        if (sensorText === 'Huella') sensorIcon = '👆';
-        else if (sensorText === 'RFID') sensorIcon = '🪪';
-        else if (sensorText === 'ZonaSegura') sensorIcon = '🔒';
+        if (sensorText === 'Huella') sensorIcon = '';
+        else if (sensorText === 'RFID') sensorIcon = '';
+        else if (sensorText === 'ZonaSegura') sensorIcon = '';
         
         // Determinar ícono según tipo de acción
-        let actionIcon = '↔️';
+        let actionIcon = '↔';
         let actionText = 'ACCESO';
         if (log.full_action_type) {
             if (log.full_action_type.includes('ENTRADA')) {
-                actionIcon = '⬇️';
+                actionIcon = '⬇';
                 actionText = 'ENTRADA';
             } else if (log.full_action_type.includes('SALIDA')) {
-                actionIcon = '⬆️';
+                actionIcon = '⬆';
                 actionText = 'SALIDA';
             } else if (log.full_action_type.includes('ZONA_SEGURA')) {
-                actionIcon = '🔐';
+                actionIcon = '';
                 actionText = 'ZONA SEGURA';
             }
         }
@@ -996,55 +996,76 @@ function renderAccessLogsTable(logs) {
         tbody.appendChild(row);
     });
 }
-// Función para renderizar paginación
 function renderAccessPagination(pagination, currentPage) {
     const container = document.getElementById('accessLogPagination');
     if (!container) return;
     
     container.innerHTML = '';
     
-    if (!pagination || pagination.pages <= 1) return;
+    if (!pagination || pagination.pages <= 1) {
+        const info = document.createElement('div');
+        info.className = 'pagination-info';
+        info.textContent = `Total: ${pagination?.total || 0} registros`;
+        container.appendChild(info);
+        return;
+    }
+    
+    // Contenedor de botones
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'pagination-buttons';
     
     // Botón anterior
     if (currentPage > 1) {
         const prevBtn = document.createElement('button');
-        prevBtn.className = 'btn small';
-        prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Anterior';
+        prevBtn.className = 'pagination-btn';
+        prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+        prevBtn.title = 'Página anterior';
         prevBtn.onclick = () => loadAccessReports(currentPage - 1);
-        container.appendChild(prevBtn);
+        buttonsContainer.appendChild(prevBtn);
     }
     
     // Números de página
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(pagination.pages, currentPage + 2);
-    
-    for (let i = startPage; i <= endPage; i++) {
-        const pageBtn = document.createElement('button');
-        pageBtn.className = `btn small ${i === currentPage ? 'primary' : 'secondary'}`;
-        pageBtn.textContent = i;
-        pageBtn.onclick = () => loadAccessReports(i);
-        container.appendChild(pageBtn);
+    for (let i = 1; i <= pagination.pages; i++) {
+        // Mostrar solo algunas páginas alrededor de la actual
+        if (i === 1 || i === pagination.pages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+            const pageBtn = document.createElement('button');
+            pageBtn.className = `pagination-btn ${i === currentPage ? 'active' : ''}`;
+            pageBtn.textContent = i;
+            pageBtn.onclick = () => loadAccessReports(i);
+            buttonsContainer.appendChild(pageBtn);
+        } else if (i === currentPage - 2 || i === currentPage + 2) {
+            // Agregar puntos suspensivos
+            const dots = document.createElement('span');
+            dots.className = 'pagination-dots';
+            dots.textContent = '...';
+            dots.style.padding = '8px 4px';
+            buttonsContainer.appendChild(dots);
+        }
     }
     
     // Botón siguiente
     if (currentPage < pagination.pages) {
         const nextBtn = document.createElement('button');
-        nextBtn.className = 'btn small';
-        nextBtn.innerHTML = 'Siguiente <i class="fas fa-chevron-right"></i>';
+        nextBtn.className = 'pagination-btn';
+        nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        nextBtn.title = 'Página siguiente';
         nextBtn.onclick = () => loadAccessReports(currentPage + 1);
-        container.appendChild(nextBtn);
+        buttonsContainer.appendChild(nextBtn);
     }
     
-    // Información de paginación
+    container.appendChild(buttonsContainer);
+    
+    // Información
     const info = document.createElement('div');
-    info.style.marginLeft = '15px';
-    info.style.fontSize = '14px';
-    info.style.color = '#666';
-    info.textContent = `Página ${currentPage} de ${pagination.pages} (${pagination.total} registros)`;
+    info.className = 'pagination-info';
+    info.innerHTML = `
+        Página <strong>${currentPage}</strong> de <strong>${pagination.pages}</strong> 
+        | Total: <strong>${pagination.total}</strong> registros
+        | Mostrando <strong>${pagination.per_page}</strong> por página
+    `;
     container.appendChild(info);
 }
 
-// Función para mostrar detalles de un acceso específico
 async function showAccessDetails(logId) {
     try {
         // Usamos el endpoint de history con filtro por ID
