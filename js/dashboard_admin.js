@@ -742,7 +742,7 @@ async function sendAdminCommandToESP32(command, huellaId = null, userId = null) 
         }
     }
 }
-
+let serverNow = null;
 async function loadAccessReports(page = 1) {
     try {
         console.log(`Cargando reportes, página ${page}...`);
@@ -766,13 +766,10 @@ async function loadAccessReports(page = 1) {
         if (actionType) params.append('action_type', actionType);
         
         if (startDate) {
-            const start = new Date(startDate);
-            params.append('start_date', start.toISOString());
+            params.append('start_date', new Date(startDate).toISOString());
         }
-        
         if (endDate) {
-            const end = new Date(endDate);
-            params.append('end_date', end.toISOString());
+            params.append('end_date', new Date(endDate).toISOString());
         }
         
         params.append('per_page', 20);
@@ -788,6 +785,16 @@ async function loadAccessReports(page = 1) {
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Error ${response.status}: ${errorText}`);
+        }
+
+        // ⬅️ CAPTURAR LA HORA DEL SERVIDOR DESDE HEADERS
+        const serverDateHeader = response.headers.get("Date");
+        if (serverDateHeader) {
+            serverNow = new Date(serverDateHeader);
+            console.log("Hora del servidor:", serverNow.toString());
+        } else {
+            serverNow = new Date();
+            console.warn("El servidor NO envió header Date. Usando hora local.");
         }
         
         const data = await response.json();
@@ -805,13 +812,11 @@ async function loadAccessReports(page = 1) {
         // 2. Actualizar tabla
         renderAccessLogsTable(data.data || []);
         
-        // 3. Actualizar paginación - ¡ESTA ES LA LÍNEA MÁS IMPORTANTE!
+        // 3. Actualizar paginación
         if (data.pagination) {
             console.log('Renderizando paginación:', data.pagination);
             renderAccessPagination(data.pagination, page);
         } else {
-            console.warn('No se recibió información de paginación');
-            // Si no hay paginación, limpiar el contenedor
             const paginationContainer = document.getElementById('accessLogPagination');
             if (paginationContainer) {
                 paginationContainer.innerHTML = `
@@ -1265,54 +1270,25 @@ async function loadAccessUsers() {
         console.error('Error al cargar usuarios:', error);
     }
 }
-// Convierte "2025-12-04 17:06:05" a Date en zona horaria -05:00
 function parseServerDate(dateStr) {
     if (!dateStr) return null;
 
-    dateStr = dateStr.trim();
+    if (dateStr.includes("T")) return new Date(dateStr);
 
-    // Si viene en formato ISO
-    if (dateStr.includes("T")) {
-        return new Date(dateStr);
-    }
-
-    // Si viene como "YYYY-MM-DD HH:MM:SS"
     return new Date(dateStr.replace(" ", "T") + "-05:00");
 }
 
-// Genera "hace X minutos / horas / días"
+
 function formatRelativeTime(timestamp) {
     if (!timestamp) return "";
 
-    let date;
-
-    // Convertir string a Date
-    if (typeof timestamp === "string") {
-        // Si es formato "2025-12-04 17:06:05"
-        if (timestamp.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-            date = parseServerDate(timestamp);
-        }
-        // Si es numérico (timestamp)
-        else if (/^\d+$/.test(timestamp)) {
-            date = new Date(parseInt(timestamp));
-        }
-        else {
-            // ISO u otros formatos válidos
-            date = new Date(timestamp);
-        }
-    }
-    else if (typeof timestamp === "number") {
-        date = new Date(timestamp);
-    }
-
+    const date = parseServerDate(timestamp);
     if (!date || isNaN(date.getTime())) return "";
 
-    const now = new Date();
+    const now = serverNow ? new Date(serverNow) : new Date();
     const diffMs = now - date;
 
-    if (diffMs < 0) {
-        return date.toLocaleString("es-ES");
-    }
+    if (diffMs < 0) return date.toLocaleString("es-ES");
 
     const sec = Math.floor(diffMs / 1000);
     const min = Math.floor(sec / 60);
@@ -1326,6 +1302,7 @@ function formatRelativeTime(timestamp) {
 
     return date.toLocaleDateString("es-ES");
 }
+
 
 document.addEventListener('DOMContentLoaded', function() {
     // ... código existente ...
