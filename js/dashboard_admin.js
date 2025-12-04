@@ -831,42 +831,8 @@ function updateAccessStatistics(stats) {
 }
 
 // Función para renderizar la tabla de logs
+// Función para renderizar la tabla de logs
 function renderAccessLogsTable(logs) {
-    const tbody = document.getElementById('accessLogTableBody');
-    tbody.innerHTML = '';
-    
-    if (!logs || logs.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="9" style="text-align: center; padding: 20px;">
-                    No se encontraron registros de acceso
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    logs.forEach(log => {
-        // Determinar clase de estado
-        let statusClass = '';
-        if (log.status === 'Permitido') {
-            statusClass = 'status-success';
-        } else if (log.status === 'Denegado') {
-            statusClass = 'status-error';
-        }
-        
-        // Determinar ícono según sensor
-        let sensorIcon = '🟢';
-        if (log.sensor_type === 'Huella') sensorIcon = '👆';
-        else if (log.sensor_type === 'RFID') sensorIcon = '🪪';
-        else if (log.sensor_type === 'ZonaSegura') sensorIcon = '🔒';
-        
-        // Determinar ícono según tipo de acción
-        let actionIcon = '↔️';
-        if (log.action_type === 'ENTRADA') actionIcon = '⬇️';
-        else if (log.action_type === 'SALIDA') actionIcon = '⬆️';
-        else if (log.action_type.includes('ZONA SEGURA')) actionIcon = '🔐';
-        function renderAccessLogsTable(logs) {
     const tbody = document.getElementById('accessLogTableBody');
     if (!tbody) return;
     
@@ -894,22 +860,24 @@ function renderAccessLogsTable(logs) {
         }
         
         // Determinar ícono según sensor
-
+        let sensorIcon = '🔍';
         let sensorText = log.sensor_type || 'Desconocido';
-        if (sensorText === 'Huella');
-        else if (sensorText === 'RFID') ;
-        else if (sensorText === 'ZonaSegura') ;
+        if (sensorText === 'Huella') sensorIcon = '👆';
+        else if (sensorText === 'RFID') sensorIcon = '🪪';
+        else if (sensorText === 'ZonaSegura') sensorIcon = '🔒';
         
         // Determinar ícono según tipo de acción
-
+        let actionIcon = '↔️';
         let actionText = 'ACCESO';
         if (log.full_action_type) {
             if (log.full_action_type.includes('ENTRADA')) {
+                actionIcon = '⬇️';
                 actionText = 'ENTRADA';
             } else if (log.full_action_type.includes('SALIDA')) {
-    
+                actionIcon = '⬆️';
                 actionText = 'SALIDA';
             } else if (log.full_action_type.includes('ZONA_SEGURA')) {
+                actionIcon = '🔐';
                 actionText = 'ZONA SEGURA';
             }
         }
@@ -969,7 +937,6 @@ function renderAccessLogsTable(logs) {
         tbody.appendChild(row);
     });
 }
-
 // Función para renderizar paginación
 function renderAccessPagination(pagination, currentPage) {
     const container = document.getElementById('accessLogPagination');
@@ -2009,7 +1976,14 @@ async function registerRFID(userId) {
         });
     }
 }
-
+// Agrega esta función después de las constantes iniciales
+function getAuthHeaders() {
+    const token = localStorage.getItem("jwtToken");
+    return {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+    };
+}
 // ========== INICIALIZACIÓN ==========
 document.addEventListener("DOMContentLoaded", function () {
     // Configurar IP por defecto si no existe
@@ -2039,3 +2013,4 @@ document.addEventListener("DOMContentLoaded", function () {
     
     console.log("Dashboard Admin inicializado correctamente - Modo LOCAL");
 });
+
