@@ -959,55 +959,27 @@ function renderAccessLogsTable(logs) {
     }
     
     logs.forEach(log => {
-        // Determinar clase de estado
         let statusClass = '';
         let statusText = log.status || 'N/A';
-        if (statusText === 'Permitido') {
-            statusClass = 'status-success';
-        } else if (statusText === 'Denegado') {
-            statusClass = 'status-error';
-        }
+        if (statusText === 'Permitido') statusClass = 'status-success';
+        else if (statusText === 'Denegado') statusClass = 'status-error';
         
-        // Determinar ícono según sensor
         let sensorIcon = '';
         let sensorText = log.sensor_type || 'Desconocido';
-        if (sensorText === 'Huella') sensorIcon = '';
-        else if (sensorText === 'RFID') sensorIcon = '';
-        else if (sensorText === 'ZonaSegura') sensorIcon = '';
         
-        // Determinar ícono según tipo de acción
         let actionIcon = '';
         let actionText = 'ACCESO';
         if (log.full_action_type) {
-            if (log.full_action_type.includes('ENTRADA')) {
-                actionIcon = '';
-                actionText = 'ENTRADA';
-            } else if (log.full_action_type.includes('SALIDA')) {
-                actionIcon = '';
-                actionText = 'SALIDA';
-            } else if (log.full_action_type.includes('ZONA_SEGURA')) {
-                actionIcon = '';
-                actionText = 'ZONA SEGURA';
-            }
+            if (log.full_action_type.includes('ENTRADA')) actionText = 'ENTRADA';
+            else if (log.full_action_type.includes('SALIDA')) actionText = 'SALIDA';
+            else if (log.full_action_type.includes('ZONA_SEGURA')) actionText = 'ZONA SEGURA';
         }
-        
 
         let accessMethod = log.access_method || 'Desconocido';
-        
-
         const userName = log.user_name || `Usuario ${log.user_id}`;
         const userUsername = log.user_username || 'N/A';
-        
-
         const localTime = log.local_time || 'N/A';
-        
-        // Calcular minutos transcurridos
-        const timestampDate = new Date(log.timestamp);
-        const now = serverNow ? new Date(serverNow) : new Date();
-        const diffMs = now - timestampDate;
-        const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    
-        
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${log.id || 'N/A'}</td>
@@ -1018,8 +990,7 @@ function renderAccessLogsTable(logs) {
             <td>
                 <div style="font-weight: 500;">${localTime}</div>
                 <small style="color: #666;">
-                    <i class="fas fa-clock"></i> ${formatRelativeTime(log.timestamp)}<br>
-                    (Hace ${minutesText})
+                    <i class="fas fa-clock"></i> ${formatRelativeTime(log.timestamp)}
                 </small>
             </td>
             <td>
@@ -1056,6 +1027,7 @@ function renderAccessLogsTable(logs) {
         tbody.appendChild(row);
     });
 }
+
 function calculateExactTimeDifference(timestamp) {
     if (!timestamp) return "N/A";
     
