@@ -990,7 +990,7 @@ function renderAccessLogsTable(logs) {
             <td>
                 <div style="font-weight: 500;">${localTime}</div>
                 <small style="color: #666;">
-                    Hace ${calculateExactTimeDifference(log.timestamp)}
+                     ${calculateExactTimeDifference(log.timestamp)}
                 </small>
             </td>
             <td>
@@ -1032,14 +1032,15 @@ function calculateExactTimeDifference(timestamp) {
     if (!timestamp) return "N/A";
 
     try {
-        const logDate = new Date(timestamp);
+        // Convertir a formato ISO y forzar zona horaria Perú (-05:00)
+        const fixedTimestamp = timestamp.replace(" ", "T") + "-05:00";
+        const logDate = new Date(fixedTimestamp);
 
-        // Usar SIEMPRE hora local del navegador (Perú)
-        const now = new Date();
+        const now = new Date(); // hora local real del navegador (Perú)
 
         let diffMs = now - logDate;
 
-        // Evitar negativos por desfases de zona horaria o servidor
+        // Evitar negativos por desfases
         if (diffMs < 0) diffMs = 0;
 
         const diffMinutes = Math.floor(diffMs / 60000);
@@ -1053,7 +1054,7 @@ function calculateExactTimeDifference(timestamp) {
         } else if (diffMinutes > 0) {
             return `Hace ${diffMinutes}m`;
         } else {
-            return "Justo ahora";
+            return "Hace 1m"; // Para evitar “Justo ahora”
         }
 
     } catch (e) {
