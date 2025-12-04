@@ -1028,46 +1028,91 @@ function renderAccessLogsTable(logs) {
     });
 }
 
+function getPeruTimeNow() {
+    const now = new Date();
+    // Crear fecha en UTC
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    // Perú es UTC-5
+    const peruOffset = -5 * 3600000; // -5 horas en milisegundos
+    return new Date(utc + peruOffset);
+}
+
+function convertToPeruTime(timestamp) {
+    // Si el timestamp viene como "2025-12-04 18:04:54"
+    const dateStr = timestamp.replace(" ", "T");
+    
+    // Crear fecha local (asumiendo que viene en hora local del servidor/ESP32)
+    const localDate = new Date(dateStr);
+    
+    // Convertir a Perú (GMT-5)
+    // Primero obtener offset local
+    const localOffset = localDate.getTimezoneOffset() * 60000;
+    // Convertir a UTC
+    const utc = localDate.getTime() - localOffset;
+    // Aplicar offset de Perú
+    const peruOffset = -5 * 3600000; // -5 horas
+    return new Date(utc + peruOffset);
+}
+
 function calculateExactTimeDifference(timestamp) {
     if (!timestamp) return "N/A";
 
     try {
-        // Convertir timestamp a formato ISO correcto
-        const fixedTimestamp = timestamp.replace(" ", "T");
-
-        // Crear fecha original
-        const logDateLocal = new Date(fixedTimestamp);
-
-        // Convertir fecha original a zona horaria de Perú (UTC-5)
-        const logDatePeru = new Date(logDateLocal.toLocaleString("en-US", { timeZone: "America/Lima" }));
-
-        // Obtener fecha actual en hora de Perú
-        const nowPeru = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Lima" }));
-
-        // Diferencia en milisegundos
-        let diffMs = nowPeru - logDatePeru;
-        if (diffMs < 0) diffMs = 0;
-
+        // Obtener hora actual en Perú
+        const peruNow = getPeruTimeNow();
+        
+        // Convertir timestamp a hora Perú
+        let peruLogTime;
+        
+        // Verificar si el timestamp ya está en formato con zona horaria
+        if (timestamp.includes("+") || timestamp.includes("Z") || timestamp.includes("T")) {
+            // Ya tiene formato ISO
+            peruLogTime = convertToPeruTime(timestamp);
+        } else {
+            // Formato simple "YYYY-MM-DD HH:MM:SS"
+            peruLogTime = convertToPeruTime(timestamp);
+        }
+        
+        // Calcular diferencia
+        const diffMs = peruNow - peruLogTime;
+        
+        // Validar que no sea fecha futura (por diferencias de zona horaria)
+        if (diffMs < 0) {
+            // Usar diferencia absoluta
+            const absDiff = Math.abs(diffMs);
+            if (absDiff < 300000) { // Menos de 5 minutos de diferencia
+                return "Justo ahora";
+            }
+            return "Recientemente";
+        }
+        
+        const diffSeconds = Math.floor(diffMs / 1000);
         const diffMinutes = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMinutes / 60);
-        const diffDays = Math.floor(diffHours / 24);
-
-        if (diffDays > 0) {
-            return `Hace ${diffDays}d ${diffHours % 24}h`;
-        } else if (diffHours > 0) {
-            return `Hace ${diffHours}h ${diffMinutes % 60}m`;
-        } else if (diffMinutes > 0) {
-            return `Hace ${diffMinutes}m`;
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        // Mostrar el formato más apropiado
+        if (diffDays >= 1) {
+            return `Hace ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`;
+        } else if (diffHours >= 1) {
+            const remainingMinutes = Math.floor((diffMs % 3600000) / 60000);
+            if (remainingMinutes > 0) {
+                return `Hace ${diffHours}h ${remainingMinutes}m`;
+            }
+            return `Hace ${diffHours} ${diffHours === 1 ? 'hora' : 'horas'}`;
+        } else if (diffMinutes >= 1) {
+            return `Hace ${diffMinutes} ${diffMinutes === 1 ? 'minuto' : 'minutos'}`;
+        } else if (diffSeconds >= 30) {
+            return `Hace ${diffSeconds} segundos`;
         } else {
             return "Justo ahora";
         }
 
     } catch (e) {
-        console.error("Error calculando diferencia:", e);
+        console.error("Error calculando diferencia:", e, "Timestamp:", timestamp);
         return "N/A";
     }
 }
-
 
 async function showAccessDetails(logId) {
     try {
