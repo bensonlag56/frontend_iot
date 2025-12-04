@@ -2047,8 +2047,8 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeAttendance();
     loadUsersForAttendance();
     loadAttendanceSummary();
+    loadAccessReports();
     
-    // Actualizar estado del ESP32 cada 30 segundos
     updateESP32Status();
     setInterval(updateESP32Status, 30000);
     
