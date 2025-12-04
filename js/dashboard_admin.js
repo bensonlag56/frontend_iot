@@ -753,7 +753,7 @@ async function loadAccessReports(page = 1) {
         const endDate = document.getElementById('accessEnd').value || '';
         
         // Construir URL con parámetros
-        let url = `${BASE_URL}/access/admin/reports?page=${page}&per_page=20`;
+        let url = `${BASE_URL}/access/admin/reports`;
         
         // Agregar parámetros si existen
         const params = [];
