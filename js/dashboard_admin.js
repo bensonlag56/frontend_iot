@@ -543,65 +543,61 @@ async function registerAdminFingerprint() {
         });
     }
 }
-// REEMPLAZA TU FUNCIÓN registerAdminRFID DUPLICADA CON ESTA VERSIÓN CORRECTA:
 async function registerAdminRFID() {
+    const esp32Url = getESP32Url();
+    
     try {
+        if (!esp32Url) {
+            throw new Error('URL del ESP32 no configurada. Configure IP local o Ngrok.');
+        }
+
         const token = localStorage.getItem("jwtToken");
         if (!token) {
-            Toast.fire({
-                icon: 'error',
-                title: 'No hay sesión activa'
-            });
+            Toast.fire({ icon: 'error', title: 'No hay sesión activa' });
             return;
         }
 
         const payload = decodeJWT(token);
-        const adminId = payload.sub; // sub: '1'
+        const adminId = payload.sub;
         
         if (!adminId) {
-            Toast.fire({
-                icon: 'error',
-                title: 'No se pudo identificar al administrador'
-            });
+            Toast.fire({ icon: 'error', title: 'No se pudo identificar al administrador' });
             return;
         }
 
-        console.log("Registrando RFID para administrador ID:", adminId);
-        
-        const esp32IP = localStorage.getItem('esp32_ip');
-        if (!esp32IP) {
+        // Verificar conexión primero
+        try {
+            const testResponse = await fetch(`${esp32Url}/status`);
+            if (!testResponse.ok) {
+                throw new Error(`No se puede acceder al ESP32 (${testResponse.status})`);
+            }
+        } catch (error) {
+            const isNgrok = esp32Url.startsWith('https://');
             Swal.fire({
                 icon: 'error',
-                title: 'IP no configurada',
-                text: 'Configure la IP del ESP32 primero en la sección de control.',
-                width: 400
-            });
-            return;
-        }
-
-        // Verificar acceso primero
-        const canAccess = await canAccessESP32FromBrowser();
-        if (!canAccess) {
-            // Mostrar instrucciones detalladas
-            Swal.fire({
-                icon: 'warning',
-                title: 'PROBLEMA DE CONEXIÓN',
+                title: 'ERROR DE CONEXIÓN',
                 html: `
-                    <div style="text-align: left; font-size: 14px;">
-                        <p>No se puede acceder al ESP32 desde su navegador.</p>
-                        <p><strong>Para solucionar:</strong></p>
+                    <div style="text-align: left;">
+                        <p><strong>URL:</strong> ${esp32Url}</p>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p><strong>Modo:</strong> ${isNgrok ? 'Ngrok (Internet)' : 'Local (Red WiFi)'}</p>
+                        <hr>
+                        <p><strong>Soluciones:</strong></p>
                         <ol>
-                            <li>Asegúrese de estar en la misma red WiFi que el ESP32</li>
-                            <li>Verifique la IP: <code>${esp32IP}</code></li>
-                            <li>Abra una nueva pestaña y vaya a: <a href="http://${esp32IP}/status" target="_blank">http://${esp32IP}/status</a></li>
-                            <li>Si no funciona, pruebe otras direcciones IP como 192.168.1.100, 192.168.1.101, etc.</li>
+                            ${isNgrok ? 
+                                '<li>Verifique que ngrok esté ejecutándose</li>' + 
+                                '<li>Pruebe en el navegador: <a href="' + esp32Url + '/status" target="_blank">' + esp32Url + '/status</a></li>' :
+                                '<li>Acceda desde HTTP, no HTTPS</li>' +
+                                '<li>Verifique que esté en la misma red WiFi</li>'
+                            }
+                            <li>Configure Ngrok para acceso desde internet</li>
                         </ol>
                         <p style="margin-top: 15px;">
-                            <button onclick="configureESP32IP()" class="btn btn-primary" style="padding: 8px 16px;">
-                                Cambiar IP del ESP32
+                            <button onclick="configureESP32IP()" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px;">
+                                Configurar IP Local
                             </button>
-                            <button onclick="testESP32Connection()" class="btn btn-secondary" style="padding: 8px 16px; margin-left: 10px;">
-                                Probar Conexión
+                            <button onclick="configureNgrok()" class="btn" style="padding: 8px 16px; background: #8e44ad; color: white;">
+                                Configurar Ngrok
                             </button>
                         </p>
                     </div>
@@ -611,14 +607,16 @@ async function registerAdminRFID() {
             return;
         }
 
-        // 1. Mostrar confirmación
+        // Mostrar confirmación
+        const isNgrok = esp32Url.startsWith('https://');
         const confirmResult = await Swal.fire({
             icon: 'info',
             title: 'REGISTRO DE RFID',
             html: `
                 <div style="text-align: left; font-size: 14px;">
                     <p><strong>Administrador:</strong> ID ${adminId}</p>
-                    <p><strong>Dispositivo ESP32:</strong> ${esp32IP}</p>
+                    <p><strong>Conexión:</strong> ${isNgrok ? 'Ngrok (Internet)' : 'Local (Red WiFi)'}</p>
+                    <p><strong>URL:</strong> ${esp32Url}</p>
                     <p style="color: green;">✅ Conexión verificada</p>
                     <hr>
                     <p><strong>Instrucciones:</strong></p>
@@ -636,22 +634,16 @@ async function registerAdminRFID() {
             width: 500
         });
 
-        if (!confirmResult.isConfirmed) {
-            return;
-        }
+        if (!confirmResult.isConfirmed) return;
 
-        // 2. Enviar comando - USANDO LA MEJOR ESTRATEGIA
-        console.log("Enviando comando READ_RFID para user_id:", adminId);
-        
-        const commandResponse = await sendCommandToESP32Direct('READ_RFID', null, adminId);
-        
-        console.log("Respuesta del ESP32:", commandResponse);
+        // Enviar comando
+        const commandResponse = await sendCommandToESP32FromBrowser('READ_RFID', null, adminId);
         
         if (!commandResponse || commandResponse.status !== 'success') {
             throw new Error(commandResponse?.message || 'Error en respuesta del ESP32');
         }
 
-        // 3. Mostrar espera
+        // Mostrar espera
         Swal.fire({
             title: 'ESPERANDO RFID',
             html: `
@@ -660,7 +652,7 @@ async function registerAdminRFID() {
                         <span class="visually-hidden">Cargando...</span>
                     </div>
                     <p style="margin-top: 15px;">Acercar llavero RFID al dispositivo</p>
-                    <p><small>IP: ${esp32IP}</small></p>
+                    <p><small>URL: ${esp32Url}</small></p>
                     <p><small>Administrador ID: ${adminId}</small></p>
                     <div id="rfid-progress" style="margin-top: 15px; font-size: 12px;">
                         Esperando lectura...
@@ -672,7 +664,7 @@ async function registerAdminRFID() {
             width: 400
         });
 
-        // 4. Monitorear
+        // Monitorear
         let checkCount = 0;
         const maxChecks = 60;
         const checkInterval = setInterval(async () => {
@@ -684,7 +676,6 @@ async function registerAdminRFID() {
             }
             
             try {
-                // Verificar si se asignó el RFID al usuario
                 const userResponse = await fetch(`${BASE_URL}/users/${adminId}`, {
                     headers: { "Authorization": "Bearer " + token }
                 });
@@ -693,7 +684,6 @@ async function registerAdminRFID() {
                     const userData = await userResponse.json();
                     
                     if (userData.rfid) {
-                        // ¡RFID asignado exitosamente!
                         clearInterval(checkInterval);
                         Swal.close();
                         
@@ -721,7 +711,6 @@ async function registerAdminRFID() {
                 console.error("Error verificando RFID:", error);
             }
             
-            // Si se excede el tiempo máximo
             if (checkCount >= maxChecks) {
                 clearInterval(checkInterval);
                 Swal.fire({
@@ -747,30 +736,23 @@ async function registerAdminRFID() {
         }, 1000);
 
     } catch (err) {
-        console.error('Error en registro de RFID del admin:', err);
+        console.error('Error en registro de RFID:', err);
         
         Swal.fire({
             icon: 'error',
-            title: 'ERROR DE CONEXIÓN',
+            title: 'ERROR',
             html: `
                 <div style="text-align: left;">
-                    <p><strong>Error:</strong> ${err.message.replace(/\n/g, '<br>')}</p>
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <p><strong>URL usada:</strong> ${esp32Url || 'No configurada'}</p>
                     <hr>
-                    <p><strong>Para solucionar:</strong></p>
+                    <p><strong>Opciones:</strong></p>
                     <ol>
-                        <li><strong>Verifique la IP:</strong> ${esp32IP || 'No configurada'}</li>
-                        <li><strong>Pruebe acceder a:</strong> <a href="http://${esp32IP}/status" target="_blank">http://${esp32IP}/status</a></li>
-                        <li><strong>Misma red WiFi:</strong> Asegúrese que su computadora y ESP32 estén en la misma red</li>
-                        <li><strong>Reinicie ESP32:</strong> A veces ayuda</li>
+                        <li>Verifique que el ESP32 esté encendido</li>
+                        <li>Pruebe acceder a ${esp32Url}/status</li>
+                        <li>Si es IP local, use HTTP (no HTTPS)</li>
+                        <li>Configure Ngrok para acceso desde internet</li>
                     </ol>
-                    <p style="margin-top: 15px;">
-                        <button onclick="testESP32Connection()" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px;">
-                            Probar Conexión
-                        </button>
-                        <button onclick="configureESP32IP()" class="btn btn-secondary" style="padding: 8px 16px;">
-                            Cambiar IP
-                        </button>
-                    </p>
                 </div>
             `,
             width: 600
@@ -817,10 +799,9 @@ async function sendCommandViaProxy(command, huellaId = null, userId = null) {
         throw error;
     }
 }
-// Primero, verifica si podemos acceder al ESP32 desde el navegador
 async function canAccessESP32FromBrowser() {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) return false;
+    const esp32Url = getESP32Url();
+    if (!esp32Url) return false;
     
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
@@ -835,14 +816,13 @@ async function canAccessESP32FromBrowser() {
         };
         
         try {
-            xhr.open('GET', `http://${esp32IP}/status`, true);
+            xhr.open('GET', `${esp32Url}/status`, true);
             xhr.send();
         } catch (e) {
             resolve(false);
         }
     });
 }
-
 // Función inteligente que decide cómo enviar el comando
 async function sendCommandSmart(command, huellaId = null, userId = null) {
     const esp32IP = localStorage.getItem('esp32_ip');
@@ -1092,53 +1072,52 @@ async function updateESP32Status() {
     const statusElement = document.getElementById('esp32-status');
     const infoElement = document.getElementById('esp32-info');
 
-    if (!statusElement) {
-        console.log('Elemento esp32-status no encontrado');
-        return;
-    }
+    if (!statusElement) return;
 
     statusElement.textContent = ' Consultando estado...';
     statusElement.className = 'status-box';
 
     try {
-        const status = await checkESP32Status();
+        const esp32Url = getESP32Url();
+        if (!esp32Url) {
+            statusElement.innerHTML = 'URL no configurada<br>Configure IP o Ngrok';
+            statusElement.className = 'status-box status-offline';
+            return;
+        }
 
-        if (status.status === 'ready') {
+        // Mostrar modo actual
+        const isNgrok = esp32Url.startsWith('https://');
+        const modeText = isNgrok ? 'NGROK' : 'LOCAL';
+        
+        const response = await fetch(`${esp32Url}/status`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            
             statusElement.innerHTML =
-                ` ESP32 CONECTADO | IP: ${ESP32_BASE_URL}<br>` +
-                ` WiFi: ${status.ssid || 'Conectado'} (${status.rssi || '?'} dBm)<br>` +
-                ` Huella ID Actual: ${status.huella_id_actual || 'Ninguno'}<br>` +
-                ` Registro Activo: ${status.registro_activo ? 'Sí' : 'No'}`;
+                ` ESP32 CONECTADO | ${modeText}<br>` +
+                ` URL: ${esp32Url}<br>` +
+                ` Estado: ${data.status}<br>` +
+                ` Sistema: ${data.sistema_listo ? 'Listo' : 'No listo'}`;
             statusElement.className = 'status-box status-online';
 
             if (infoElement) {
                 infoElement.innerHTML = `
-                    <p><strong>Estado del Sistema:</strong> ${status.sistema_listo ? 'Listo' : ' No listo'}</p>
-                    <p><strong>Sensor de Huella:</strong> ${status.sistema_listo ? 'Conectado' : 'Desconectado'}</p>
-                    <p><strong>Último ID:</strong> ${status.huella_id_actual || 'Ninguno'}</p>
-                    <p><strong>Registro en Curso:</strong> ${status.registro_activo ? 'Activo' : 'Inactivo'}</p>
+                    <p><strong>Conexión:</strong> ${isNgrok ? 'Ngrok (Internet)' : 'Local (Red WiFi)'}</p>
+                    <p><strong>IP:</strong> ${data.ip}</p>
+                    <p><strong>Registro activo:</strong> ${data.registro_activo ? 'Sí' : 'No'}</p>
+                    <p><strong>RFID activo:</strong> ${data.lectura_rfid_activa ? 'Sí' : 'No'}</p>
                 `;
             }
         } else {
-            statusElement.innerHTML =
-                ` ESP32 DESCONECTADO<br>` +
-                `Error: ${status.error || 'No se pudo conectar'}<br>` +
-                `IP: ${ESP32_BASE_URL}`;
-            statusElement.className = 'status-box status-offline';
-
-            if (infoElement) {
-                infoElement.innerHTML = '<p>No se pudo obtener información del dispositivo.</p>';
-            }
+            throw new Error(`HTTP ${response.status}`);
         }
+        
     } catch (error) {
         statusElement.innerHTML =
-            ` ERROR DE CONEXIÓN<br>` +
-            `Verifique la IP: ${ESP32_BASE_URL}`;
+            ` ESP32 DESCONECTADO<br>` +
+            `Error: ${error.message}`;
         statusElement.className = 'status-box status-offline';
-
-        if (infoElement) {
-            infoElement.innerHTML = '<p>Error al consultar el estado del dispositivo.</p>';
-        }
     }
 }
 
@@ -2056,20 +2035,16 @@ document.addEventListener("DOMContentLoaded", function () {
     console.log("Dashboard Admin inicializado correctamente");
 });
 async function sendCommandToESP32FromBrowser(command, huellaId = null, userId = null) {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) {
-        throw new Error('IP del ESP32 no configurada');
+    const esp32Url = getESP32Url();
+    if (!esp32Url) {
+        throw new Error('URL del ESP32 no configurada');
     }
 
-    // IMPORTANTE: El navegador está en la misma red local que el ESP32
-    // Usamos XMLHttpRequest que maneja mejor CORS
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         
-        // URL del ESP32 local - el navegador PUEDE acceder si está en la misma red
-        const url = `http://${esp32IP}/command`;
-        
-        console.log("Enviando comando directo al ESP32:", url);
+        const url = `${esp32Url}/command`;
+        console.log("Enviando comando a:", url);
         
         xhr.timeout = 15000;
         xhr.open('POST', url, true);
@@ -2106,4 +2081,134 @@ async function sendCommandToESP32FromBrowser(command, huellaId = null, userId = 
         
         xhr.send(JSON.stringify(payload));
     });
+}
+
+function configureNgrok() {
+    const currentNgrokUrl = localStorage.getItem('ngrok_url') || '';
+    const useNgrok = localStorage.getItem('use_ngrok') === 'true';
+    
+    const newNgrokUrl = prompt(
+        'CONFIGURAR NGROK\n\n' +
+        'Obtén una URL de ngrok ejecutando:\n' +
+        'ngrok http 192.168.1.108:80\n\n' +
+        'Ingresa la URL HTTPS de ngrok (ej: https://abc123.ngrok.io):',
+        currentNgrokUrl
+    );
+    
+    if (newNgrokUrl) {
+        if (newNgrokUrl.startsWith('https://')) {
+            localStorage.setItem('ngrok_url', newNgrokUrl);
+            localStorage.setItem('use_ngrok', 'true');
+            
+            Toast.fire({
+                icon: 'success',
+                title: 'Ngrok configurado: ' + newNgrokUrl
+            });
+            
+            // Probar conexión
+            testNgrokConnection(newNgrokUrl);
+            
+            // Actualizar estado
+            updateESP32Status();
+        } else {
+            Toast.fire({
+                icon: 'error',
+                title: 'URL debe comenzar con https://'
+            });
+        }
+    }
+}
+function getESP32Url() {
+    const esp32IP = localStorage.getItem('esp32_ip');
+    const useNgrok = localStorage.getItem('use_ngrok') === 'true';
+    const ngrokUrl = localStorage.getItem('ngrok_url');
+    
+    if (useNgrok && ngrokUrl) {
+        return ngrokUrl; 
+    } else if (esp32IP) {
+        return `http://${esp32IP}`;
+    }
+    return null;
+}
+async function testNgrokConnection(ngrokUrl) {
+    try {
+        Swal.fire({
+            title: 'Probando ngrok...',
+            text: 'Conectando a ' + ngrokUrl,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        const response = await fetch(`${ngrokUrl}/status`);
+        if (response.ok) {
+            const data = await response.json();
+            Swal.fire({
+                icon: 'success',
+                title: '✓ Ngrok conectado',
+                html: `
+                    <div style="text-align: left;">
+                        <p><strong>URL:</strong> ${ngrokUrl}</p>
+                        <p><strong>Estado ESP32:</strong> ${data.status}</p>
+                        <p><strong>IP:</strong> ${data.ip}</p>
+                        <p style="color: green; margin-top: 10px;">
+                            ✅ Ahora puedes acceder desde cualquier lugar
+                        </p>
+                    </div>
+                `,
+                width: 500
+            });
+            return true;
+        }
+    } catch (error) {
+        Swal.fire({
+            icon: 'error',
+            title: '✗ Error ngrok',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>URL:</strong> ${ngrokUrl}</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <hr>
+                    <p><strong>Verifica:</strong></p>
+                    <ol>
+                        <li>Que ngrok esté ejecutándose</li>
+                        <li>Que el ESP32 esté encendido</li>
+                        <li>Que la URL sea correcta</li>
+                        <li>Prueba en el navegador: <a href="${ngrokUrl}/status" target="_blank">${ngrokUrl}/status</a></li>
+                    </ol>
+                </div>
+            `,
+            width: 600
+        });
+        return false;
+    }
+}
+function toggleConnectionMode() {
+    const useNgrok = localStorage.getItem('use_ngrok') === 'true';
+    const esp32IP = localStorage.getItem('esp32_ip');
+    const ngrokUrl = localStorage.getItem('ngrok_url');
+    
+    if (!useNgrok && !ngrokUrl) {
+        // Si no hay ngrok configurado, pedir configuración
+        configureNgrok();
+        return;
+    }
+    
+    const newMode = !useNgrok;
+    localStorage.setItem('use_ngrok', newMode.toString());
+    
+    if (newMode) {
+        Toast.fire({
+            icon: 'success',
+            title: 'Modo: NGROK (Internet)'
+        });
+    } else {
+        Toast.fire({
+            icon: 'info',
+            title: 'Modo: LOCAL (Red WiFi)'
+        });
+    }
+    
+    updateESP32Status();
 }
