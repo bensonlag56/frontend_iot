@@ -1272,7 +1272,6 @@ function parseServerDate(dateStr) {
 
     return new Date(dateStr.replace(" ", "T") + "-05:00");
 }
-
 function formatRelativeTime(timestamp) {
     if (!timestamp) return '';
 
