@@ -73,6 +73,15 @@ function initializeNavigation() {
     if (navEsp32Control) {
         navEsp32Control.addEventListener("click", () => showSection("section-esp32-control"));
     }
+    // Agregar este código después de las otras navegaciones
+    const navAccessReports = document.getElementById("nav-access-reports");
+    if (navAccessReports) {
+        navAccessReports.addEventListener("click", () => {
+            showSection("section-access-reports");
+            loadAccessReports();
+            loadAccessUsers(); // Cargar usuarios en el select
+        });
+    }
     
     // Crear y añadir el botón de "Mis Credenciales" al sidebar
     const sidebar = document.querySelector('.sidebar nav');
@@ -744,44 +753,81 @@ async function loadAccessReports(page = 1) {
         const endDate = document.getElementById('accessEnd').value || '';
         
         // Construir URL con parámetros
-        let url = `${API_BASE_URL}/access/admin/reports?page=${page}`;
-        if (userId) url += `&user_id=${userId}`;
-        if (sensorType) url += `&sensor_type=${sensorType}`;
-        if (status) url += `&status=${status}`;
-        if (actionType) url += `&action_type=${actionType}`;
-        if (startDate) url += `&start_date=${new Date(startDate).toISOString()}`;
-        if (endDate) url += `&end_date=${new Date(endDate).toISOString()}`;
+        let url = `${BASE_URL}/access/admin/reports?page=${page}&per_page=20`;
+        
+        // Agregar parámetros si existen
+        const params = [];
+        if (userId) params.push(`user_id=${userId}`);
+        if (sensorType) params.push(`sensor_type=${sensorType}`);
+        if (status) params.push(`status=${status}`);
+        if (actionType) params.push(`action_type=${actionType}`);
+        if (startDate) params.push(`start_date=${new Date(startDate).toISOString()}`);
+        if (endDate) params.push(`end_date=${new Date(endDate).toISOString()}`);
+        
+        if (params.length > 0) {
+            url += `&${params.join('&')}`;
+        }
+        
+        console.log('Cargando reportes desde:', url);
         
         const response = await fetch(url, {
             headers: getAuthHeaders()
         });
         
-        if (!response.ok) throw new Error('Error al cargar reportes');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error respuesta:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
         
         const data = await response.json();
         
+        console.log('Datos recibidos:', data);
+        
+        if (data.success === false) {
+            throw new Error(data.msg || 'Error en la respuesta del servidor');
+        }
+        
         // Actualizar estadísticas
-        updateAccessStatistics(data.statistics);
+        if (data.statistics) {
+            updateAccessStatistics(data.statistics);
+        }
         
         // Actualizar tabla
-        renderAccessLogsTable(data.data);
+        renderAccessLogsTable(data.data || []);
         
         // Actualizar paginación
-        renderAccessPagination(data.pagination, page);
+        if (data.pagination) {
+            renderAccessPagination(data.pagination, page);
+        }
         
     } catch (error) {
-        console.error('Error:', error);
-        Swal.fire('Error', 'No se pudieron cargar los reportes de acceso', 'error');
+        console.error('Error cargando reportes:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudieron cargar los reportes de acceso: ' + error.message
+        });
     }
 }
 
 // Función para actualizar las estadísticas
 function updateAccessStatistics(stats) {
-    document.getElementById('totalAccessCount').textContent = stats.total || 0;
-    document.getElementById('allowedAccessCount').textContent = stats.allowed || 0;
-    document.getElementById('deniedAccessCount').textContent = stats.denied || 0;
-    document.getElementById('fingerprintAccessCount').textContent = stats.fingerprint || 0;
-    document.getElementById('rfidAccessCount').textContent = stats.rfid || 0;
+    if (!stats) return;
+    
+    // Actualizar elementos de estadísticas
+    const updateElement = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value || 0;
+        }
+    };
+    
+    updateElement('totalAccessCount', stats.total);
+    updateElement('allowedAccessCount', stats.allowed);
+    updateElement('deniedAccessCount', stats.denied);
+    updateElement('fingerprintAccessCount', stats.fingerprint);
+    updateElement('rfidAccessCount', stats.rfid);
 }
 
 // Función para renderizar la tabla de logs
@@ -820,36 +866,103 @@ function renderAccessLogsTable(logs) {
         if (log.action_type === 'ENTRADA') actionIcon = '⬇️';
         else if (log.action_type === 'SALIDA') actionIcon = '⬆️';
         else if (log.action_type.includes('ZONA SEGURA')) actionIcon = '🔐';
+        function renderAccessLogsTable(logs) {
+    const tbody = document.getElementById('accessLogTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" style="text-align: center; padding: 20px;">
+                    No se encontraron registros de acceso con los filtros seleccionados
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    logs.forEach(log => {
+        // Determinar clase de estado
+        let statusClass = '';
+        let statusText = log.status || 'N/A';
+        if (statusText === 'Permitido') {
+            statusClass = 'status-success';
+        } else if (statusText === 'Denegado') {
+            statusClass = 'status-error';
+        }
+        
+        // Determinar ícono según sensor
+
+        let sensorText = log.sensor_type || 'Desconocido';
+        if (sensorText === 'Huella');
+        else if (sensorText === 'RFID') ;
+        else if (sensorText === 'ZonaSegura') ;
+        
+        // Determinar ícono según tipo de acción
+
+        let actionText = 'ACCESO';
+        if (log.full_action_type) {
+            if (log.full_action_type.includes('ENTRADA')) {
+                actionText = 'ENTRADA';
+            } else if (log.full_action_type.includes('SALIDA')) {
+    
+                actionText = 'SALIDA';
+            } else if (log.full_action_type.includes('ZONA_SEGURA')) {
+                actionText = 'ZONA SEGURA';
+            }
+        }
+        
+        // Método de acceso
+        let accessMethod = log.access_method || 'Desconocido';
+        
+        // Usuario
+        const userName = log.user_name || `Usuario ${log.user_id}`;
+        const userUsername = log.user_username || 'N/A';
+        
+        // Hora local
+        const localTime = log.local_time || 'N/A';
         
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${log.id}</td>
+            <td>${log.id || 'N/A'}</td>
             <td>
-                <strong>${log.user_name}</strong><br>
-                <small>@${log.user_username || 'N/A'}</small>
+                <div style="font-weight: 500;">${userName}</div>
+                <small style="color: #666;">ID: ${log.user_id} | @${userUsername}</small>
             </td>
             <td>
-                ${log.local_time}<br>
+                ${localTime}<br>
                 <small style="color: #666;">${formatRelativeTime(log.timestamp)}</small>
             </td>
-            <td>${sensorIcon} ${log.sensor_type}</td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    ${sensorIcon}
+                    <span>${sensorText}</span>
+                </div>
+            </td>
             <td>
                 <span class="status-badge ${statusClass}">
-                    ${log.status}
+                    ${statusText}
                 </span>
             </td>
             <td>
-                <small style="font-family: monospace;">${log.access_method}</small>
+                <code style="font-size: 11px; background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">
+                    ${accessMethod}
+                </code>
             </td>
             <td>
-                ${actionIcon} ${log.action_type}
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    ${actionIcon}
+                    <span>${actionText}</span>
+                </div>
             </td>
-            <td>
-                ${log.reason || 'N/A'}
+            <td style="max-width: 200px; word-wrap: break-word;">
+                ${log.reason || log.motivo_decision || 'N/A'}
             </td>
             <td>
                 <button onclick="showAccessDetails(${log.id})" class="btn small">
-                    Detalles
+                    <i class="fas fa-eye"></i> Ver
                 </button>
             </td>
         `;
@@ -860,15 +973,17 @@ function renderAccessLogsTable(logs) {
 // Función para renderizar paginación
 function renderAccessPagination(pagination, currentPage) {
     const container = document.getElementById('accessLogPagination');
+    if (!container) return;
+    
     container.innerHTML = '';
     
-    if (pagination.pages <= 1) return;
+    if (!pagination || pagination.pages <= 1) return;
     
     // Botón anterior
     if (currentPage > 1) {
         const prevBtn = document.createElement('button');
         prevBtn.className = 'btn small';
-        prevBtn.innerHTML = '&laquo; Anterior';
+        prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Anterior';
         prevBtn.onclick = () => loadAccessReports(currentPage - 1);
         container.appendChild(prevBtn);
     }
@@ -889,23 +1004,32 @@ function renderAccessPagination(pagination, currentPage) {
     if (currentPage < pagination.pages) {
         const nextBtn = document.createElement('button');
         nextBtn.className = 'btn small';
-        nextBtn.innerHTML = 'Siguiente &raquo;';
+        nextBtn.innerHTML = 'Siguiente <i class="fas fa-chevron-right"></i>';
         nextBtn.onclick = () => loadAccessReports(currentPage + 1);
         container.appendChild(nextBtn);
     }
+    
+    // Información de paginación
+    const info = document.createElement('div');
+    info.style.marginLeft = '15px';
+    info.style.fontSize = '14px';
+    info.style.color = '#666';
+    info.textContent = `Página ${currentPage} de ${pagination.pages} (${pagination.total} registros)`;
+    container.appendChild(info);
 }
 
 // Función para mostrar detalles de un acceso específico
 async function showAccessDetails(logId) {
     try {
-        const response = await fetch(`${API_BASE_URL}/access/history?log_id=${logId}`, {
+        // Usamos el endpoint de history con filtro por ID
+        const response = await fetch(`${BASE_URL}/access/history?user_id=&date=&sensor_type=&log_id=${logId}`, {
             headers: getAuthHeaders()
         });
         
         if (!response.ok) throw new Error('Error al obtener detalles');
         
         const logs = await response.json();
-        const log = logs.find(l => l.id === logId) || logs[0];
+        const log = logs.find(l => l.id === logId);
         
         if (!log) {
             Swal.fire('Error', 'No se encontró el registro', 'error');
@@ -924,43 +1048,60 @@ async function showAccessDetails(logId) {
             second: '2-digit'
         });
         
+        // Obtener información del usuario si existe
+        let userInfo = '';
+        if (log.user_id) {
+            try {
+                const userRes = await fetch(`${BASE_URL}/users/${log.user_id}`, {
+                    headers: getAuthHeaders()
+                });
+                if (userRes.ok) {
+                    const userData = await userRes.json();
+                    userInfo = `
+                        <p><strong>Usuario:</strong> ${userData.nombre} ${userData.apellido}</p>
+                        <p><strong>Username:</strong> ${userData.username}</p>
+                        <p><strong>Rol:</strong> ${userData.role}</p>
+                    `;
+                }
+            } catch (e) {
+                console.error('Error obteniendo usuario:', e);
+            }
+        }
+        
         // Crear contenido del modal
-        let detailsHtml = `
+        const detailsHtml = `
             <div style="text-align: left; max-width: 500px;">
                 <h3>Detalles del Acceso</h3>
                 
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0;">
                     <p><strong>ID Registro:</strong> ${log.id}</p>
                     <p><strong>Fecha/Hora:</strong> ${formattedDate}</p>
-                    <p><strong>Sensor:</strong> ${log.sensor_type}</p>
+                    <p><strong>Sensor:</strong> ${log.sensor_type || 'N/A'}</p>
                     <p><strong>Estado:</strong> 
                         <span class="${log.status === 'Permitido' ? 'status-success' : 'status-error'}">
                             ${log.status}
                         </span>
                     </p>
-                    <p><strong>Usuario ID:</strong> ${log.user_id}</p>
+                    ${userInfo}
+                    <p><strong>Usuario ID:</strong> ${log.user_id || 'N/A'}</p>
+                    ${log.rfid ? `<p><strong>RFID:</strong> <code>${log.rfid}</code></p>` : ''}
+                    ${log.huella_id ? `<p><strong>Huella ID:</strong> ${log.huella_id}</p>` : ''}
+                    ${log.reason ? `<p><strong>Motivo/Detalles:</strong> ${log.reason}</p>` : ''}
+                </div>
+                
+                <div style="margin-top: 15px; font-size: 12px; color: #666;">
+                    <p><i class="fas fa-info-circle"></i> Este registro fue generado automáticamente por el sistema</p>
+                </div>
+            </div>
         `;
-        
-        if (log.rfid) {
-            detailsHtml += `<p><strong>RFID:</strong> <code>${log.rfid}</code></p>`;
-        }
-        
-        if (log.huella_id) {
-            detailsHtml += `<p><strong>Huella ID:</strong> ${log.huella_id}</p>`;
-        }
-        
-        if (log.reason) {
-            detailsHtml += `<p><strong>Motivo/Detalles:</strong> ${log.reason}</p>`;
-        }
-        
-        detailsHtml += `</div>`;
         
         Swal.fire({
             title: 'Información de Acceso',
             html: detailsHtml,
             icon: 'info',
             confirmButtonText: 'Cerrar',
-            width: '600px'
+            width: '550px',
+            showCloseButton: true
         });
         
     } catch (error) {
@@ -968,7 +1109,6 @@ async function showAccessDetails(logId) {
         Swal.fire('Error', 'No se pudieron cargar los detalles', 'error');
     }
 }
-
 // Función para exportar a CSV
 async function exportAccessCSV() {
     try {
@@ -981,7 +1121,7 @@ async function exportAccessCSV() {
         const endDate = document.getElementById('accessEnd').value || '';
         
         // Construir URL
-        let url = `${API_BASE_URL}/access/admin/reports/export`;
+        let url = `${BASE_URL}/access/admin/reports/export`;
         const params = new URLSearchParams();
         
         if (userId) params.append('user_id', userId);
@@ -995,43 +1135,62 @@ async function exportAccessCSV() {
             url += `?${params.toString()}`;
         }
         
-        // Descargar el archivo
+        console.log('Exportando desde:', url);
+        
         const response = await fetch(url, {
             headers: getAuthHeaders()
         });
         
-        if (!response.ok) throw new Error('Error al exportar');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
         
         // Crear blob y descargar
         const blob = await response.blob();
         const downloadUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = downloadUrl;
-        a.download = `reporte_accesos_${new Date().toISOString().slice(0,10)}.csv`;
+        
+        // Nombre del archivo con fecha
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0,10).replace(/-/g, '');
+        const timeStr = now.toTimeString().slice(0,8).replace(/:/g, '');
+        a.download = `reporte_accesos_${dateStr}_${timeStr}.csv`;
+        
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(downloadUrl);
         
-        Swal.fire('Éxito', 'Reporte exportado correctamente', 'success');
+        Toast.fire({
+            icon: 'success',
+            title: 'Reporte exportado correctamente'
+        });
         
     } catch (error) {
-        console.error('Error:', error);
-        Swal.fire('Error', 'No se pudo exportar el reporte', 'error');
+        console.error('Error exportando:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo exportar el reporte: ' + error.message
+        });
     }
 }
 
 // Función para cargar usuarios en el select
 async function loadAccessUsers() {
     try {
-        const response = await fetch(`${API_BASE_URL}/users/`, {
+        const response = await fetch(`${BASE_URL}/users/?page=1&per_page=100`, {
             headers: getAuthHeaders()
         });
         
         if (!response.ok) throw new Error('Error al cargar usuarios');
         
-        const users = await response.json();
+        const data = await response.json();
+        const users = data.users || [];
         const select = document.getElementById('accessUserSelect');
+        
+        if (!select) return;
         
         // Limpiar opciones excepto la primera
         while (select.options.length > 1) {
@@ -1050,24 +1209,32 @@ async function loadAccessUsers() {
         console.error('Error al cargar usuarios:', error);
     }
 }
-
-// Función auxiliar para formatear tiempo relativo
 function formatRelativeTime(timestamp) {
     if (!timestamp) return '';
     
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return 'hace unos segundos';
-    if (diffMins < 60) return `hace ${diffMins} min`;
-    if (diffHours < 24) return `hace ${diffHours} horas`;
-    if (diffDays < 7) return `hace ${diffDays} días`;
-    
-    return date.toLocaleDateString('es-ES');
+    try {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return '';
+        
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'hace unos segundos';
+        if (diffMins < 60) return `hace ${diffMins} min`;
+        if (diffHours < 24) return `hace ${diffHours} h`;
+        if (diffDays < 7) return `hace ${diffDays} días`;
+        
+        return date.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    } catch (e) {
+        return '';
+    }
 }
 
 // Inicializar cuando se carga la página
@@ -1078,15 +1245,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnLoadAccessLogs')?.addEventListener('click', () => loadAccessReports());
     document.getElementById('btnExportAccessCSV')?.addEventListener('click', exportAccessCSV);
     
-    // Configurar fecha por defecto (últimos 7 días)
+    const btnLoadAccessLogs = document.getElementById('btnLoadAccessLogs');
+    if (btnLoadAccessLogs) {
+        btnLoadAccessLogs.addEventListener('click', () => loadAccessReports(1));
+    }
+    
+    const btnExportAccessCSV = document.getElementById('btnExportAccessCSV');
+    if (btnExportAccessCSV) {
+        btnExportAccessCSV.addEventListener('click', exportAccessCSV);
+    }
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 7);
     
-    document.getElementById('accessStart').value = startDate.toISOString().slice(0, 16);
-    document.getElementById('accessEnd').value = endDate.toISOString().slice(0, 16);
+     const accessStart = document.getElementById('accessStart');
+    const accessEnd = document.getElementById('accessEnd');
     
-    // Cargar lista de usuarios
+    if (accessStart && accessEnd) {
+        accessStart.value = startDate.toISOString().slice(0, 16);
+        accessEnd.value = endDate.toISOString().slice(0, 16);
+    }
+    
     loadAccessUsers();
 });
 
