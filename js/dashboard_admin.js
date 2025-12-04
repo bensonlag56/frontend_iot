@@ -1006,9 +1006,7 @@ function renderAccessLogsTable(logs) {
         const now = serverNow ? new Date(serverNow) : new Date();
         const diffMs = now - timestampDate;
         const diffMinutes = Math.floor(diffMs / (1000 * 60));
-        const minutesText = diffMinutes >= 0 ? 
-            `${diffMinutes} min` : 
-            'En el futuro';
+    
         
         const row = document.createElement('tr');
         row.innerHTML = `
