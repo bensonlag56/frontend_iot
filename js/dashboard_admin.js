@@ -1265,92 +1265,66 @@ async function loadAccessUsers() {
         console.error('Error al cargar usuarios:', error);
     }
 }
+function parseServerDate(dateStr) {
+
+    if (dateStr.includes("T")) return new Date(dateStr);
+
+
+    return new Date(dateStr.replace(" ", "T") + "-05:00");
+}
+
 function formatRelativeTime(timestamp) {
-    if (!timestamp || timestamp === "0" || timestamp === 0 || timestamp === "null" || timestamp === "undefined") {
-        return '';
-    }
+    if (!timestamp) return '';
 
     try {
         let date;
 
-        // Normalizar entrada
         if (typeof timestamp === 'string') {
             timestamp = timestamp.trim();
 
             if (!timestamp) return '';
 
-            // Si es número en string (ej. "1701212341234")
-            if (/^\d+$/.test(timestamp)) {
-                const numTimestamp = parseInt(timestamp);
-                if (numTimestamp === 0) return ''; // Evita 1970
-                date = new Date(numTimestamp);
+            // ¿Viene como 2025-12-04 17:06:05 ?
+            if (timestamp.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+                // Interpretar como hora local del servidor (Perú -05:00)
+                date = new Date(timestamp.replace(" ", "T") + "-05:00");
             }
-            // Formato ISO
-            else if (timestamp.includes('T') && timestamp.includes('Z')) {
-                date = new Date(timestamp);
+            else if (/^\d+$/.test(timestamp)) {
+                const num = parseInt(timestamp);
+                if (num === 0) return '';
+                date = new Date(num);
             }
-            // Formato "2024-12-05 15:30:00"
-            else if (timestamp.includes(' ')) {
-                date = new Date(timestamp.replace(' ', 'T'));
-            }
-            // Intento final
             else {
+                // ISO o cualquier otro formato
                 date = new Date(timestamp);
             }
-        }
-
+        } 
         else if (typeof timestamp === 'number') {
-            if (timestamp === 0) return ''; // Evita 1970
+            if (timestamp === 0) return '';
             date = new Date(timestamp);
         }
 
-        // Validar fecha
-        if (!date || isNaN(date.getTime()) || date.getFullYear() === 1970) {
-            return '';
-        }
+        if (!date || isNaN(date.getTime())) return '';
 
         const now = new Date();
         const diffMs = now - date;
 
-        // Fecha futura → devolver fecha normal
-        if (diffMs < 0) {
-            return date.toLocaleString('es-ES', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
+        if (diffMs < 0) return date.toLocaleString('es-ES');
 
-        const diffSeconds = Math.floor(diffMs / 1000);
-        const diffMinutes = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
+        const sec = Math.floor(diffMs / 1000);
+        const min = Math.floor(sec / 60);
+        const hrs = Math.floor(min / 60);
+        const days = Math.floor(hrs / 24);
 
-        if (diffSeconds < 60) return 'hace unos segundos';
-        if (diffMinutes < 60) return diffMinutes === 1 ? 'hace 1 minuto' : `hace ${diffMinutes} minutos`;
-        if (diffHours < 24) return diffHours === 1 ? 'hace 1 hora' : `hace ${diffHours} horas`;
-        if (diffDays < 7) return diffDays === 1 ? 'hace 1 día' : `hace ${diffDays} días`;
+        if (sec < 60) return 'hace unos segundos';
+        if (min < 60) return min === 1 ? 'hace 1 minuto' : `hace ${min} minutos`;
+        if (hrs < 24) return hrs === 1 ? 'hace 1 hora' : `hace ${hrs} horas`;
+        if (days < 7) return days === 1 ? 'hace 1 día' : `hace ${days} días`;
 
-        if (diffDays < 30) {
-            const weeks = Math.floor(diffDays / 7);
-            return weeks === 1 ? 'hace 1 semana' : `hace ${weeks} semanas`;
-        }
-
-        if (diffDays < 365) {
-            const months = Math.floor(diffDays / 30);
-            return months === 1 ? 'hace 1 mes' : `hace ${months} meses`;
-        }
-
-        return date.toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
+        return date.toLocaleDateString('es-ES');
 
     } catch (e) {
-        console.error('Error formateando tiempo relativo:', e, 'Timestamp:', timestamp);
+        console.error('Error al formatear:', e, timestamp);
         return '';
     }
 }
