@@ -742,69 +742,11 @@ async function sendAdminCommandToESP32(command, huellaId = null, userId = null) 
         }
     }
 }
+
 async function loadAccessReports(page = 1) {
     try {
-        // Obtener valores de los filtros
-        const userId = document.getElementById('accessUserSelect').value || '';
-        const sensorType = document.getElementById('accessSensorSelect').value || '';
-        const status = document.getElementById('accessStatusSelect').value || '';
-        const actionType = document.getElementById('accessActionType').value || '';
-        const startDate = document.getElementById('accessStart').value || '';
-        const endDate = document.getElementById('accessEnd').value || '';
+        console.log(`Cargando reportes, página ${page}...`);
         
-        // Construir URL con parámetros - CORREGIDO
-        let url = `${BASE_URL}/access/admin/reports`;
-        
-        // Agregar parámetros si existen - CORREGIDO
-        const params = new URLSearchParams();
-        if (page) params.append('page', page);
-        if (userId) params.append('user_id', userId);
-        if (sensorType) params.append('sensor_type', sensorType);
-        if (status) params.append('status', status);
-        if (actionType) params.append('action_type', actionType);
-        if (startDate) params.append('start_date', new Date(startDate).toISOString());
-        if (endDate) params.append('end_date', new Date(endDate).toISOString());
-        
-        // Agregar parámetros de paginación
-        params.append('per_page', 20);
-        
-        // Concatenar con ? si hay parámetros
-        if (Array.from(params).length > 0) {
-            url += `?${params.toString()}`;
-        }
-        
-        console.log('Cargando reportes desde:', url);
-        
-        const response = await fetch(url, {
-            headers: getAuthHeaders(),
-            // Agregar modo cors explícitamente
-            mode: 'cors',
-            credentials: 'include' // Solo si usas cookies
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error respuesta:', errorText, 'Status:', response.status);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        console.log('Datos recibidos:', data);
-        
-        if (data.success === false) {
-            throw new Error(data.msg || 'Error en la respuesta del servidor');
-        }
-        
-        // Actualizar estadísticas
-        if (data.statistics) {
-            updateAccessStatistics(data.statistics);
-        }
-        
-        // Actualizar tabla
-        renderAccessLogsTable(data.data || []);
-        async function loadAccessReports(page = 1) {
-    try {
         // Obtener valores de los filtros
         const userId = document.getElementById('accessUserSelect')?.value || '';
         const sensorType = document.getElementById('accessSensorSelect')?.value || '';
@@ -813,10 +755,8 @@ async function loadAccessReports(page = 1) {
         const startDate = document.getElementById('accessStart')?.value || '';
         const endDate = document.getElementById('accessEnd')?.value || '';
         
-        // Construir URL CORRECTAMENTE
+        // Construir URL
         let url = `${BASE_URL}/access/admin/reports`;
-        
-        // Agregar parámetros con URLSearchParams
         const params = new URLSearchParams();
         params.append('page', page);
         
@@ -824,21 +764,21 @@ async function loadAccessReports(page = 1) {
         if (sensorType) params.append('sensor_type', sensorType);
         if (status) params.append('status', status);
         if (actionType) params.append('action_type', actionType);
+        
         if (startDate) {
-            // Convertir a UTC
             const start = new Date(startDate);
             params.append('start_date', start.toISOString());
         }
+        
         if (endDate) {
             const end = new Date(endDate);
             params.append('end_date', end.toISOString());
         }
         
         params.append('per_page', 20);
-        
         url = `${url}?${params.toString()}`;
         
-        console.log('Cargando reportes desde:', url);
+        console.log('URL:', url);
         
         const response = await fetch(url, {
             headers: getAuthHeaders(),
@@ -851,8 +791,37 @@ async function loadAccessReports(page = 1) {
         }
         
         const data = await response.json();
+        console.log('Respuesta del servidor:', data);
         
-        // Resto del código...
+        if (data.success === false) {
+            throw new Error(data.msg || 'Error en la respuesta');
+        }
+        
+        // 1. Actualizar estadísticas
+        if (data.statistics) {
+            updateAccessStatistics(data.statistics);
+        }
+        
+        // 2. Actualizar tabla
+        renderAccessLogsTable(data.data || []);
+        
+        // 3. Actualizar paginación - ¡ESTA ES LA LÍNEA MÁS IMPORTANTE!
+        if (data.pagination) {
+            console.log('Renderizando paginación:', data.pagination);
+            renderAccessPagination(data.pagination, page);
+        } else {
+            console.warn('No se recibió información de paginación');
+            // Si no hay paginación, limpiar el contenedor
+            const paginationContainer = document.getElementById('accessLogPagination');
+            if (paginationContainer) {
+                paginationContainer.innerHTML = `
+                    <div style="color: #666; font-size: 14px;">
+                        Total: ${data.data?.length || 0} registros
+                    </div>
+                `;
+            }
+        }
+        
     } catch (error) {
         console.error('Error cargando reportes:', error);
         Swal.fire({
@@ -867,7 +836,8 @@ async function loadAccessReports(page = 1) {
 function updateAccessStatistics(stats) {
     if (!stats) return;
     
-    // Actualizar elementos de estadísticas
+    console.log('Actualizando estadísticas:', stats);
+    
     const updateElement = (id, value) => {
         const element = document.getElementById(id);
         if (element) {
@@ -881,16 +851,91 @@ function updateAccessStatistics(stats) {
     updateElement('fingerprintAccessCount', stats.fingerprint);
     updateElement('rfidAccessCount', stats.rfid);
 }
-    } catch (error) {
-        console.error('Error cargando reportes:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: error.message
-        });
-    }
-}
 
+// Función para renderizar paginación
+function renderAccessPagination(pagination, currentPage) {
+    const container = document.getElementById('accessLogPagination');
+    if (!container) {
+        console.error('No se encontró el contenedor de paginación con ID: accessLogPagination');
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    if (!pagination || pagination.pages <= 1) {
+        const info = document.createElement('div');
+        info.className = 'pagination-info';
+        info.textContent = `Total: ${pagination?.total || 0} registros`;
+        container.appendChild(info);
+        return;
+    }
+    
+    console.log(`Renderizando paginación: página ${currentPage} de ${pagination.pages}`);
+    
+    // Contenedor de botones
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'pagination-buttons';
+    
+    // Botón anterior
+    if (currentPage > 1) {
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'pagination-btn';
+        prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+        prevBtn.title = 'Página anterior';
+        prevBtn.onclick = () => {
+            console.log('Navegando a página:', currentPage - 1);
+            loadAccessReports(currentPage - 1);
+        };
+        buttonsContainer.appendChild(prevBtn);
+    }
+    
+    // Números de página
+    for (let i = 1; i <= pagination.pages; i++) {
+        // Mostrar solo algunas páginas alrededor de la actual
+        if (i === 1 || i === pagination.pages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+            const pageBtn = document.createElement('button');
+            pageBtn.className = `pagination-btn ${i === currentPage ? 'active' : ''}`;
+            pageBtn.textContent = i;
+            pageBtn.onclick = () => {
+                console.log('Navegando a página:', i);
+                loadAccessReports(i);
+            };
+            buttonsContainer.appendChild(pageBtn);
+        } else if (i === currentPage - 2 || i === currentPage + 2) {
+            // Agregar puntos suspensivos
+            const dots = document.createElement('span');
+            dots.className = 'pagination-dots';
+            dots.textContent = '...';
+            dots.style.padding = '8px 4px';
+            buttonsContainer.appendChild(dots);
+        }
+    }
+    
+    // Botón siguiente
+    if (currentPage < pagination.pages) {
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'pagination-btn';
+        nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        nextBtn.title = 'Página siguiente';
+        nextBtn.onclick = () => {
+            console.log('Navegando a página:', currentPage + 1);
+            loadAccessReports(currentPage + 1);
+        };
+        buttonsContainer.appendChild(nextBtn);
+    }
+    
+    container.appendChild(buttonsContainer);
+    
+    // Información
+    const info = document.createElement('div');
+    info.className = 'pagination-info';
+    info.innerHTML = `
+        Página <strong>${currentPage}</strong> de <strong>${pagination.pages}</strong> 
+        | Total: <strong>${pagination.total}</strong> registros
+        | Mostrando <strong>${pagination.per_page}</strong> por página
+    `;
+    container.appendChild(info);
+}
 function renderAccessLogsTable(logs) {
     const tbody = document.getElementById('accessLogTableBody');
     if (!tbody) return;
@@ -995,75 +1040,6 @@ function renderAccessLogsTable(logs) {
         `;
         tbody.appendChild(row);
     });
-}
-function renderAccessPagination(pagination, currentPage) {
-    const container = document.getElementById('accessLogPagination');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (!pagination || pagination.pages <= 1) {
-        const info = document.createElement('div');
-        info.className = 'pagination-info';
-        info.textContent = `Total: ${pagination?.total || 0} registros`;
-        container.appendChild(info);
-        return;
-    }
-    
-    // Contenedor de botones
-    const buttonsContainer = document.createElement('div');
-    buttonsContainer.className = 'pagination-buttons';
-    
-    // Botón anterior
-    if (currentPage > 1) {
-        const prevBtn = document.createElement('button');
-        prevBtn.className = 'pagination-btn';
-        prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
-        prevBtn.title = 'Página anterior';
-        prevBtn.onclick = () => loadAccessReports(currentPage - 1);
-        buttonsContainer.appendChild(prevBtn);
-    }
-    
-    // Números de página
-    for (let i = 1; i <= pagination.pages; i++) {
-        // Mostrar solo algunas páginas alrededor de la actual
-        if (i === 1 || i === pagination.pages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-            const pageBtn = document.createElement('button');
-            pageBtn.className = `pagination-btn ${i === currentPage ? 'active' : ''}`;
-            pageBtn.textContent = i;
-            pageBtn.onclick = () => loadAccessReports(i);
-            buttonsContainer.appendChild(pageBtn);
-        } else if (i === currentPage - 2 || i === currentPage + 2) {
-            // Agregar puntos suspensivos
-            const dots = document.createElement('span');
-            dots.className = 'pagination-dots';
-            dots.textContent = '...';
-            dots.style.padding = '8px 4px';
-            buttonsContainer.appendChild(dots);
-        }
-    }
-    
-    // Botón siguiente
-    if (currentPage < pagination.pages) {
-        const nextBtn = document.createElement('button');
-        nextBtn.className = 'pagination-btn';
-        nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
-        nextBtn.title = 'Página siguiente';
-        nextBtn.onclick = () => loadAccessReports(currentPage + 1);
-        buttonsContainer.appendChild(nextBtn);
-    }
-    
-    container.appendChild(buttonsContainer);
-    
-    // Información
-    const info = document.createElement('div');
-    info.className = 'pagination-info';
-    info.innerHTML = `
-        Página <strong>${currentPage}</strong> de <strong>${pagination.pages}</strong> 
-        | Total: <strong>${pagination.total}</strong> registros
-        | Mostrando <strong>${pagination.per_page}</strong> por página
-    `;
-    container.appendChild(info);
 }
 
 async function showAccessDetails(logId) {
