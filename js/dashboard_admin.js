@@ -803,18 +803,62 @@ async function loadAccessReports(page = 1) {
         
         // Actualizar tabla
         renderAccessLogsTable(data.data || []);
+        async function loadAccessReports(page = 1) {
+    try {
+        // Obtener valores de los filtros
+        const userId = document.getElementById('accessUserSelect')?.value || '';
+        const sensorType = document.getElementById('accessSensorSelect')?.value || '';
+        const status = document.getElementById('accessStatusSelect')?.value || '';
+        const actionType = document.getElementById('accessActionType')?.value || '';
+        const startDate = document.getElementById('accessStart')?.value || '';
+        const endDate = document.getElementById('accessEnd')?.value || '';
         
-        // Actualizar paginación
-        if (data.pagination) {
-            renderAccessPagination(data.pagination, page);
+        // Construir URL CORRECTAMENTE
+        let url = `${BASE_URL}/access/admin/reports`;
+        
+        // Agregar parámetros con URLSearchParams
+        const params = new URLSearchParams();
+        params.append('page', page);
+        
+        if (userId) params.append('user_id', userId);
+        if (sensorType) params.append('sensor_type', sensorType);
+        if (status) params.append('status', status);
+        if (actionType) params.append('action_type', actionType);
+        if (startDate) {
+            // Convertir a UTC
+            const start = new Date(startDate);
+            params.append('start_date', start.toISOString());
+        }
+        if (endDate) {
+            const end = new Date(endDate);
+            params.append('end_date', end.toISOString());
         }
         
+        params.append('per_page', 20);
+        
+        url = `${url}?${params.toString()}`;
+        
+        console.log('Cargando reportes desde:', url);
+        
+        const response = await fetch(url, {
+            headers: getAuthHeaders(),
+            mode: 'cors'
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Resto del código...
     } catch (error) {
         console.error('Error cargando reportes:', error);
         Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'No se pudieron cargar los reportes de acceso: ' + error.message
+            text: error.message
         });
     }
 }
@@ -837,9 +881,16 @@ function updateAccessStatistics(stats) {
     updateElement('fingerprintAccessCount', stats.fingerprint);
     updateElement('rfidAccessCount', stats.rfid);
 }
+    } catch (error) {
+        console.error('Error cargando reportes:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message
+        });
+    }
+}
 
-// Función para renderizar la tabla de logs
-// Función para renderizar la tabla de logs
 function renderAccessLogsTable(logs) {
     const tbody = document.getElementById('accessLogTableBody');
     if (!tbody) return;
@@ -2017,7 +2068,72 @@ async function registerRFID(userId) {
         });
     }
 }
-// Agrega esta función después de las constantes iniciales
+// Agrega después de las otras funciones de inicialización
+function initializeSchedules() {
+    const btnSaveSchedule = document.getElementById("btn-save-schedule");
+    if (btnSaveSchedule) {
+        btnSaveSchedule.addEventListener("click", saveSchedule);
+    }
+}
+
+async function loadSchedules() {
+    try {
+        const res = await fetch(`${BASE_URL}/schedules/?page=1&per_page=50`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) {
+            Toast.fire({ icon: 'error', title: 'Error cargando horarios' });
+            return;
+        }
+        
+        const data = await res.json();
+        const tbody = document.getElementById("schedulesTableBody");
+        if (!tbody) return;
+        
+        tbody.innerHTML = "";
+        
+        if (!data.schedules || data.schedules.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 20px;">
+                        No hay horarios registrados
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        data.schedules.forEach(s => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${s.id}</td>
+                <td>${s.nombre}</td>
+                <td>${s.hora_entrada}</td>
+                <td>${s.hora_salida}</td>
+                <td>${s.dias}</td>
+                <td>${s.tolerancia_entrada || 0} min</td>
+                <td>${s.tolerancia_salida || 0} min</td>
+                <td>
+                    <button class="btn small" onclick="editSchedule(${s.id})">Editar</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+    } catch (err) {
+        console.error(err);
+        Toast.fire({ icon: 'error', title: 'Error cargando horarios' });
+    }
+}
+function initializeAttendance() {
+    // Inicializa funciones de asistencia si las necesitas
+    console.log("Inicializando módulo de asistencia");
+}
+async function saveSchedule() {
+    // Implementa según tu lógica
+    console.log("Guardar horario");
+}
 function getAuthHeaders() {
     const token = localStorage.getItem("jwtToken");
     return {
@@ -2047,8 +2163,8 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeAttendance();
     loadUsersForAttendance();
     loadAttendanceSummary();
-    loadAccessReports();
     
+    // Actualizar estado del ESP32 cada 30 segundos
     updateESP32Status();
     setInterval(updateESP32Status, 30000);
     
