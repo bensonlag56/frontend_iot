@@ -752,31 +752,39 @@ async function loadAccessReports(page = 1) {
         const startDate = document.getElementById('accessStart').value || '';
         const endDate = document.getElementById('accessEnd').value || '';
         
-        // Construir URL con parámetros
+        // Construir URL con parámetros - CORREGIDO
         let url = `${BASE_URL}/access/admin/reports`;
         
-        // Agregar parámetros si existen
-        const params = [];
-        if (userId) params.push(`user_id=${userId}`);
-        if (sensorType) params.push(`sensor_type=${sensorType}`);
-        if (status) params.push(`status=${status}`);
-        if (actionType) params.push(`action_type=${actionType}`);
-        if (startDate) params.push(`start_date=${new Date(startDate).toISOString()}`);
-        if (endDate) params.push(`end_date=${new Date(endDate).toISOString()}`);
+        // Agregar parámetros si existen - CORREGIDO
+        const params = new URLSearchParams();
+        if (page) params.append('page', page);
+        if (userId) params.append('user_id', userId);
+        if (sensorType) params.append('sensor_type', sensorType);
+        if (status) params.append('status', status);
+        if (actionType) params.append('action_type', actionType);
+        if (startDate) params.append('start_date', new Date(startDate).toISOString());
+        if (endDate) params.append('end_date', new Date(endDate).toISOString());
         
-        if (params.length > 0) {
-            url += `&${params.join('&')}`;
+        // Agregar parámetros de paginación
+        params.append('per_page', 20);
+        
+        // Concatenar con ? si hay parámetros
+        if (Array.from(params).length > 0) {
+            url += `?${params.toString()}`;
         }
         
         console.log('Cargando reportes desde:', url);
         
         const response = await fetch(url, {
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(),
+            // Agregar modo cors explícitamente
+            mode: 'cors',
+            credentials: 'include' // Solo si usas cookies
         });
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Error respuesta:', errorText);
+            console.error('Error respuesta:', errorText, 'Status:', response.status);
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
@@ -1087,7 +1095,7 @@ async function exportAccessCSV() {
         const startDate = document.getElementById('accessStart').value || '';
         const endDate = document.getElementById('accessEnd').value || '';
         
-        // Construir URL
+        // Construir URL CORRECTAMENTE
         let url = `${BASE_URL}/access/admin/reports/export`;
         const params = new URLSearchParams();
         
@@ -1105,7 +1113,8 @@ async function exportAccessCSV() {
         console.log('Exportando desde:', url);
         
         const response = await fetch(url, {
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(),
+            mode: 'cors'
         });
         
         if (!response.ok) {
@@ -1143,6 +1152,38 @@ async function exportAccessCSV() {
         });
     }
 }
+// Función para cargar datos iniciales
+function loadInitialAccessData() {
+    // Establecer fechas por defecto (últimos 7 días)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+    
+    const accessStart = document.getElementById('accessStart');
+    const accessEnd = document.getElementById('accessEnd');
+    
+    if (accessStart && accessEnd) {
+        // Formato YYYY-MM-DDThh:mm para input datetime-local
+        accessStart.value = startDate.toISOString().slice(0, 16);
+        accessEnd.value = endDate.toISOString().slice(0, 16);
+    }
+    
+    // Cargar reportes iniciales
+    loadAccessReports(1);
+}
+
+// Modificar el event listener del botón
+document.addEventListener('DOMContentLoaded', function() {
+    // ... código existente ...
+    
+    // Agregar eventos para reportes de acceso
+    document.getElementById('btnLoadAccessLogs')?.addEventListener('click', () => loadAccessReports(1));
+    document.getElementById('btnExportAccessCSV')?.addEventListener('click', exportAccessCSV);
+    
+    // Cargar datos iniciales
+    loadInitialAccessData();
+    loadAccessUsers();
+});
 
 // Función para cargar usuarios en el select
 async function loadAccessUsers() {
