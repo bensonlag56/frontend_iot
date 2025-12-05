@@ -1832,7 +1832,7 @@ async function registerEmployee() {
 async function loadEmployees() {
     try {
         // Usa el endpoint que muestra TODOS los usuarios (no solo activos)
-        const res = await fetch(`${BASE_URL}/users/all?page=1&per_page=100`, {
+        const res = await fetch(`${BASE_URL}/users/all`, {
             headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
         });
 
@@ -2235,7 +2235,7 @@ async function removeHuella(userId) {
 async function loadSuspendedUsers() {
     try {
         // Puedes usar un endpoint específico o filtrar del endpoint all
-        const res = await fetch(`${BASE_URL}/users/all?page=1&per_page=100`, {
+        const res = await fetch(`${BASE_URL}/users/all`, {
             headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
         });
 
