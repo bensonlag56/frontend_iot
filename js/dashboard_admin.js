@@ -5044,50 +5044,94 @@ async function loadSchedules() {
         const data = await res.json();
         console.log("Horarios cargados:", data);
         
-        const tbody = document.getElementById("schedulesTableBody");
-        if (!tbody) {
-            console.error("No se encontró schedulesTableBody");
+        const container = document.getElementById("schedulesContainer");
+        if (!container) {
+            console.error("No se encontró schedulesContainer");
             return;
         }
         
-        tbody.innerHTML = "";
+        container.innerHTML = "";
         
         if (!data || data.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="8" style="text-align: center; padding: 20px;">
-                        No hay horarios registrados
-                    </td>
-                </tr>
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; grid-column: 1 / -1;">
+                    <i class="fas fa-calendar-times" style="font-size: 48px; color: #ccc; margin-bottom: 15px;"></i>
+                    <p style="color: #666; font-size: 16px;">No hay horarios registrados</p>
+                    <button onclick="openModal('createScheduleModal')" class="btn primary" style="margin-top: 15px;">
+                        <i class="fas fa-plus"></i> Crear primer horario
+                    </button>
+                </div>
             `;
             return;
         }
         
         data.forEach(s => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${s.id}</td>
-                <td>${s.nombre}</td>
-                <td>${s.hora_entrada || 'N/A'}</td>
-                <td>${s.hora_salida || 'N/A'}</td>
-                <td>${s.dias || 'N/A'}</td>
-                <td>${s.tolerancia_entrada || 0} min</td>
-                <td>${s.tolerancia_salida || 0} min</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="btn small btn-edit" onclick="openEditScheduleModal(${s.id})">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
-                        <button class="btn small btn-danger" onclick="deleteSchedule(${s.id})">
-                            <i class="fas fa-trash"></i> Eliminar
-                        </button>
-                        <button class="btn small btn-secondary" onclick="assignScheduleToUser(${s.id})">
-                            <i class="fas fa-user-plus"></i> Asignar
-                        </button>
-                    </div>
-                </td>
+            const card = document.createElement("div");
+            card.className = "schedule-card";
+            card.style.cssText = `
+                background: white;
+                border-radius: 10px;
+                padding: 20px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-left: 4px solid #007bff;
+                transition: transform 0.2s;
             `;
-            tbody.appendChild(tr);
+            card.onmouseenter = function() { this.style.transform = 'translateY(-5px)'; };
+            card.onmouseleave = function() { this.style.transform = 'translateY(0)'; };
+            
+            // Formatear días para mostrar mejor
+            const diasArray = s.dias ? s.dias.split(',') : [];
+            const diasHTML = diasArray.map(dia => `<span style="display: inline-block; background: #e9ecef; padding: 3px 8px; border-radius: 12px; margin: 2px; font-size: 12px;">${dia.trim()}</span>`).join('');
+            
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                    <div>
+                        <h3 style="margin: 0 0 5px 0; color: #333;">${s.nombre || 'Sin nombre'}</h3>
+                        <span style="font-size: 12px; color: #666; background: #f8f9fa; padding: 2px 8px; border-radius: 10px;">
+                            ${s.tipo === 'fijo' ? 'Horario Fijo' : 'Horario Rotativo'}
+                        </span>
+                    </div>
+                    <div style="color: #666; font-size: 14px;">
+                        ID: ${s.id}
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #666;">Entrada:</span>
+                        <span style="font-weight: bold;">${s.hora_entrada || 'N/A'}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #666;">Salida:</span>
+                        <span style="font-weight: bold;">${s.hora_salida || 'N/A'}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #666;">Tolerancia:</span>
+                        <span>${s.tolerancia_entrada || 0} min / ${s.tolerancia_salida || 0} min</span>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <div style="color: #666; font-size: 14px; margin-bottom: 5px;">Días:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                        ${diasHTML || '<span style="color: #999;">No asignado</span>'}
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 8px; border-top: 1px solid #eee; padding-top: 15px;">
+                    <button onclick="openEditScheduleModal(${s.id})" class="btn small" style="flex: 1;">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    <button onclick="deleteSchedule(${s.id})" class="btn small btn-danger" style="flex: 1;">
+                        <i class="fas fa-trash"></i> Eliminar
+                    </button>
+                    <button onclick="assignScheduleToUser(${s.id})" class="btn small btn-secondary" style="flex: 1;">
+                        <i class="fas fa-user-plus"></i> Asignar
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(card);
         });
         
         Toast.fire({ 
@@ -5100,6 +5144,50 @@ async function loadSchedules() {
         Toast.fire({ 
             icon: 'error', 
             title: 'Error cargando horarios: ' + err.message 
+        });
+    }
+}
+async function assignScheduleToUser(scheduleId) {
+    try {
+        // Primero cargar usuarios
+        const usersRes = await fetch(`${BASE_URL}/users/`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!usersRes.ok) {
+            throw new Error('Error cargando usuarios');
+        }
+        
+        const usersData = await usersRes.json();
+        const users = usersData.users || [];
+        
+        // Llenar select de usuarios
+        const select = document.getElementById('assignUserSelect');
+        select.innerHTML = '<option value="">Seleccionar usuario</option>';
+        
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.nombre} ${user.apellido} (${user.username})`;
+            select.appendChild(option);
+        });
+        
+        // Guardar ID del horario
+        document.getElementById('assignScheduleId').value = scheduleId;
+        
+        // Establecer fecha de inicio como hoy
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('assignStartDate').value = today;
+        document.getElementById('assignEndDate').value = '';
+        
+        // Abrir modal
+        openModal('assignScheduleModal');
+        
+    } catch (err) {
+        console.error("Error preparando asignación:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error al cargar usuarios: ' + err.message 
         });
     }
 }
