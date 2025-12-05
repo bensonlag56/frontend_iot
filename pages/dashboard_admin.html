@@ -543,7 +543,149 @@
     flex: 1;
     min-width: 180px;
 }
+.assignments-modal {
+    max-width: 800px !important;
+}
 
+.assignments-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+}
+
+.assignments-table th {
+    background: #f8f9fa;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.assignments-table td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.assignments-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.assignment-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-update-assignment {
+    background: #17a2b8;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-update-assignment:hover {
+    background: #138496;
+}
+
+.btn-delete-assignment {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-delete-assignment:hover {
+    background: #c82333;
+}
+
+/* Estilos para modal de actualizar asignación */
+.update-assignment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.form-group select,
+.form-group input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+/* Estados de asignaciones */
+.status-active {
+    background: #d4edda;
+    color: #155724;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.status-inactive {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    display: inline-block;
+}
+
+/* Botón en tarjeta de horario */
+.btn-view-assignments {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-view-assignments:hover {
+    background: #5a6268;
+}
   </style>
 </head>
 
@@ -1094,7 +1236,86 @@
 
     </div>
   </div>
+<div id="scheduleAssignmentsModal" class="modal" style="display:none;">
+    <div class="modal-content assignments-modal">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3>Asignaciones del Horario</h3>
+            <button onclick="closeModal('scheduleAssignmentsModal')" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">×</button>
+        </div>
+        
+        <div id="assignmentsInfo" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <!-- La información del horario se cargará aquí -->
+        </div>
+        
+        <div class="table-responsive">
+            <table class="assignments-table">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Fecha Inicio</th>
+                        <th>Fecha Fin</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="assignmentsTableBody">
+                    <!-- Las asignaciones se cargarán aquí -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="noAssignmentsMessage" style="display: none; text-align: center; padding: 40px; color: #666;">
+            <i class="fas fa-users" style="font-size: 48px; margin-bottom: 15px;"></i>
+            <p style="font-size: 16px;">No hay asignaciones para este horario</p>
+        </div>
+        
+        <div class="modal-actions" style="margin-top: 20px;">
+            <button class="btn secondary" onclick="closeModal('scheduleAssignmentsModal')">
+                Cerrar
+            </button>
+        </div>
+    </div>
+</div>
 
+<!-- ========================= -->
+<!-- MODAL ACTUALIZAR ASIGNACIÓN -->
+<!-- ========================= -->
+<div id="updateAssignmentModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width: 500px;">
+        <h3>Actualizar Asignación</h3>
+        
+        <input type="hidden" id="updateAssignmentId">
+        
+        <div class="update-assignment-form">
+            <div class="form-group">
+                <label>Horario</label>
+                <select id="updateAssignmentSchedule" class="form-control">
+                    <!-- Las opciones se cargarán dinámicamente -->
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Fecha de Inicio</label>
+                    <input type="date" id="updateAssignmentStartDate" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Fecha de Fin (opcional)</label>
+                    <input type="date" id="updateAssignmentEndDate" class="form-control">
+                </div>
+            </div>
+            
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button id="btnSaveAssignmentUpdate" class="btn primary">
+                    <i class="fas fa-save"></i> Guardar Cambios
+                </button>
+                <button class="btn secondary" onclick="closeModal('updateAssignmentModal')">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
   <!-- SOLO CONFIGURACIÓN BÁSICA EN HTML -->
   <script>
 

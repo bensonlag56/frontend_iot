@@ -5863,12 +5863,468 @@ async function saveSchedule() {
         });
     }
 }
+async function viewScheduleAssignments(scheduleId) {
+    try {
+        console.log(`Cargando asignaciones para horario ${scheduleId}...`);
+        
+        // 1. Cargar información del horario
+        const scheduleRes = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!scheduleRes.ok) {
+            throw new Error('Error cargando información del horario');
+        }
+        
+        const schedule = await scheduleRes.json();
+        
+        // 2. Cargar asignaciones del horario
+        const assignmentsRes = await fetch(`${BASE_URL}/schedules/${scheduleId}/assignments`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!assignmentsRes.ok) {
+            throw new Error('Error cargando asignaciones');
+        }
+        
+        const data = await assignmentsRes.json();
+        
+        if (!data.success) {
+            throw new Error(data.msg || 'Error en respuesta del servidor');
+        }
+        
+        // 3. Actualizar la información del modal
+        const infoElement = document.getElementById('assignmentsInfo');
+        if (infoElement) {
+            infoElement.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="margin: 0 0 5px 0;">${schedule.nombre}</h4>
+                        <p style="margin: 0; color: #666;">
+                            ID: ${scheduleId} | 
+                            Horario: ${schedule.hora_entrada} - ${schedule.hora_salida}
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 12px; color: #666;">
+                            <strong>Total:</strong> ${data.total_count || 0} asignaciones
+                        </div>
+                        <div style="font-size: 12px; color: #28a745;">
+                            <strong>Activas:</strong> ${data.active_count || 0}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 4. Renderizar la tabla de asignaciones
+        const tbody = document.getElementById('assignmentsTableBody');
+        const noAssignmentsMsg = document.getElementById('noAssignmentsMessage');
+        
+        if (data.assignments && data.assignments.length > 0) {
+            tbody.innerHTML = '';
+            
+            data.assignments.forEach(assignment => {
+                const isActive = assignment.is_active;
+                const tr = document.createElement('tr');
+                
+                tr.innerHTML = `
+                    <td>
+                        <div style="font-weight: 500;">${assignment.user_name}</div>
+                        <small style="color: #666;">@${assignment.username}</small>
+                    </td>
+                    <td>${assignment.start_date || 'N/A'}</td>
+                    <td>${assignment.end_date || 'Sin fecha fin'}</td>
+                    <td>
+                        <span class="${isActive ? 'status-active' : 'status-inactive'}">
+                            ${isActive ? 'Activa' : 'Inactiva'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="assignment-actions">
+                            <button onclick="openUpdateAssignmentModal(${scheduleId}, ${assignment.user_id}, '${assignment.start_date}', '${assignment.end_date || ''}')" 
+                                    class="btn-update-assignment">
+                                <i class="fas fa-edit"></i> Actualizar
+                            </button>
+                            <button onclick="deleteUserAssignment(${scheduleId}, ${assignment.user_id}, '${assignment.user_name}')" 
+                                    class="btn-delete-assignment">
+                                <i class="fas fa-trash"></i> Eliminar
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+            
+            tbody.style.display = 'table-row-group';
+            if (noAssignmentsMsg) noAssignmentsMsg.style.display = 'none';
+        } else {
+            tbody.innerHTML = '';
+            tbody.style.display = 'none';
+            if (noAssignmentsMsg) noAssignmentsMsg.style.display = 'block';
+        }
+        
+        // 5. Abrir el modal
+        openModal('scheduleAssignmentsModal');
+        
+    } catch (err) {
+        console.error('Error cargando asignaciones:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudieron cargar las asignaciones: ' + err.message
+        });
+    }
+}
+
+// Función para abrir modal de actualizar asignación
+async function openUpdateAssignmentModal(scheduleId, userId, currentStartDate, currentEndDate) {
+    try {
+        console.log(`Abriendo modal para actualizar asignación - Schedule: ${scheduleId}, User: ${userId}`);
+        
+        // Guardar información
+        sessionStorage.setItem('updateAssignmentScheduleId', scheduleId);
+        sessionStorage.setItem('updateAssignmentUserId', userId);
+        
+        // Cargar todos los horarios para el select
+        const schedulesRes = await fetch(`${BASE_URL}/schedules/`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!schedulesRes.ok) throw new Error('Error cargando horarios');
+        const allSchedules = await schedulesRes.json();
+        
+        // Crear opciones
+        const select = document.getElementById('updateAssignmentSchedule');
+        select.innerHTML = '';
+        
+        allSchedules.forEach(schedule => {
+            const option = document.createElement('option');
+            option.value = schedule.id;
+            option.textContent = `${schedule.nombre} (${schedule.hora_entrada} - ${schedule.hora_salida})`;
+            if (schedule.id == scheduleId) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        // Establecer fechas actuales
+        document.getElementById('updateAssignmentStartDate').value = currentStartDate;
+        document.getElementById('updateAssignmentEndDate').value = currentEndDate || '';
+        
+        // Abrir modal
+        openModal('updateAssignmentModal');
+        
+    } catch (err) {
+        console.error('Error preparando modal de actualización:', err);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error: ' + err.message
+        });
+    }
+}
+
+// Función para guardar cambios en asignación
+async function saveAssignmentUpdate() {
+    try {
+        const scheduleId = sessionStorage.getItem('updateAssignmentScheduleId');
+        const userId = sessionStorage.getItem('updateAssignmentUserId');
+        const newScheduleId = document.getElementById('updateAssignmentSchedule').value;
+        const startDate = document.getElementById('updateAssignmentStartDate').value;
+        const endDate = document.getElementById('updateAssignmentEndDate').value || null;
+        
+        if (!scheduleId || !userId) {
+            throw new Error('Información de asignación no encontrada');
+        }
+        
+        if (!startDate) {
+            Toast.fire({
+                icon: 'warning',
+                title: 'La fecha de inicio es obligatoria'
+            });
+            return;
+        }
+        
+        // Preparar payload
+        const payload = {
+            schedule_id: parseInt(newScheduleId),
+            start_date: startDate
+        };
+        
+        if (endDate) {
+            payload.end_date = endDate;
+        }
+        
+        console.log('Actualizando asignación:', { userId, scheduleId, payload });
+        
+        // Primero necesitamos obtener el ID de la asignación
+        // Para esto, listamos todas las asignaciones y filtramos
+        const assignmentsRes = await fetch(`${BASE_URL}/schedules/assignments?user_id=${userId}&schedule_id=${scheduleId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!assignmentsRes.ok) throw new Error('Error obteniendo asignación');
+        
+        const assignmentsData = await assignmentsRes.json();
+        
+        if (!assignmentsData.success || !assignmentsData.assignments || assignmentsData.assignments.length === 0) {
+            throw new Error('No se encontró la asignación');
+        }
+        
+        // Tomar la primera asignación (debería ser única para este usuario y horario)
+        const assignment = assignmentsData.assignments[0];
+        
+        // Ahora actualizar la asignación
+        const updateRes = await fetch(`${BASE_URL}/schedules/assignments/${assignment.assignment_id}`, {
+            method: 'PUT',
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const updateData = await updateRes.json();
+        
+        if (!updateRes.ok || !updateData.success) {
+            throw new Error(updateData.msg || 'Error actualizando asignación');
+        }
+        
+        Toast.fire({
+            icon: 'success',
+            title: 'Asignación actualizada correctamente'
+        });
+        
+        // Cerrar modales y recargar
+        closeModal('updateAssignmentModal');
+        closeModal('scheduleAssignmentsModal');
+        
+        // Recargar asignaciones del horario original
+        if (parseInt(newScheduleId) !== parseInt(scheduleId)) {
+            // Si cambió de horario, actualizar ambos horarios
+            await viewScheduleAssignments(scheduleId);
+            await viewScheduleAssignments(newScheduleId);
+        } else {
+            await viewScheduleAssignments(scheduleId);
+        }
+        
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('updateAssignmentScheduleId');
+        sessionStorage.removeItem('updateAssignmentUserId');
+        
+    } catch (err) {
+        console.error('Error actualizando asignación:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo actualizar la asignación: ' + err.message
+        });
+    }
+}
+
+// Función para eliminar asignación de usuario
+async function deleteUserAssignment(scheduleId, userId, userName) {
+    try {
+        const confirmResult = await Swal.fire({
+            title: '¿Eliminar asignación?',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Usuario:</strong> ${userName}</p>
+                    <p><strong>Horario ID:</strong> ${scheduleId}</p>
+                    <p style="color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        Esta acción no se puede deshacer.
+                    </p>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (!confirmResult.isConfirmed) return;
+        
+        // Primero obtener el ID de la asignación
+        const assignmentsRes = await fetch(`${BASE_URL}/schedules/assignments?user_id=${userId}&schedule_id=${scheduleId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!assignmentsRes.ok) throw new Error('Error obteniendo asignación');
+        
+        const assignmentsData = await assignmentsRes.json();
+        
+        if (!assignmentsData.success || !assignmentsData.assignments || assignmentsData.assignments.length === 0) {
+            throw new Error('No se encontró la asignación');
+        }
+        
+        const assignmentId = assignmentsData.assignments[0].assignment_id;
+        
+        // Ahora eliminar la asignación
+        const deleteRes = await fetch(`${BASE_URL}/schedules/assignments/${assignmentId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        
+        if (!deleteRes.ok) {
+            throw new Error('Error eliminando asignación');
+        }
+        
+        Toast.fire({
+            icon: 'success',
+            title: 'Asignación eliminada correctamente'
+        });
+        
+        // Recargar las asignaciones
+        await viewScheduleAssignments(scheduleId);
+        
+    } catch (err) {
+        console.error('Error eliminando asignación:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo eliminar la asignación: ' + err.message
+        });
+    }
+}
+
+// Función para listar todas las asignaciones (vista general)
+async function listAllAssignments() {
+    try {
+        console.log('Cargando todas las asignaciones...');
+        
+        const res = await fetch(`${BASE_URL}/schedules/assignments`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) {
+            throw new Error('Error cargando asignaciones');
+        }
+        
+        const data = await res.json();
+        
+        // Crear modal para mostrar todas las asignaciones
+        let assignmentsHtml = `
+            <div style="text-align: left; margin-bottom: 20px;">
+                <h3>Todas las Asignaciones de Horarios</h3>
+                <p style="color: #666;">Total: ${data.total_count || 0} asignaciones</p>
+            </div>
+        `;
+        
+        if (data.assignments && data.assignments.length > 0) {
+            assignmentsHtml += `
+                <div class="table-responsive">
+                    <table class="assignments-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Horario</th>
+                                <th>Fecha Inicio</th>
+                                <th>Fecha Fin</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.assignments.forEach(assignment => {
+                assignmentsHtml += `
+                    <tr>
+                        <td>
+                            <div style="font-weight: 500;">${assignment.user_name}</div>
+                            <small style="color: #666;">@${assignment.username}</small>
+                        </td>
+                        <td>${assignment.schedule_name}</td>
+                        <td>${assignment.start_date || 'N/A'}</td>
+                        <td>${assignment.end_date || 'Sin fecha fin'}</td>
+                        <td>
+                            <span class="${assignment.is_active ? 'status-active' : 'status-inactive'}">
+                                ${assignment.is_active ? 'Activa' : 'Inactiva'}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="assignment-actions">
+                                <button onclick="openUpdateAssignmentModal(${assignment.schedule_id}, ${assignment.user_id}, '${assignment.start_date}', '${assignment.end_date || ''}')" 
+                                        class="btn-update-assignment">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="deleteUserAssignment(${assignment.schedule_id}, ${assignment.user_id}, '${assignment.user_name}')" 
+                                        class="btn-delete-assignment">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            assignmentsHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            assignmentsHtml += `
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <i class="fas fa-users" style="font-size: 48px; margin-bottom: 15px;"></i>
+                    <p style="font-size: 16px;">No hay asignaciones registradas</p>
+                </div>
+            `;
+        }
+        
+        await Swal.fire({
+            title: '',
+            html: assignmentsHtml,
+            width: 900,
+            showCloseButton: true,
+            showConfirmButton: false
+        });
+        
+    } catch (err) {
+        console.error('Error cargando todas las asignaciones:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudieron cargar las asignaciones: ' + err.message
+        });
+    }
+}
+
 function getAuthHeaders() {
     const token = localStorage.getItem("jwtToken");
     return {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json"
     };
+}
+function initializeScheduleAssignments() {
+    // Configurar evento para el botón de guardar actualización
+    const btnSaveAssignmentUpdate = document.getElementById('btnSaveAssignmentUpdate');
+    if (btnSaveAssignmentUpdate) {
+        btnSaveAssignmentUpdate.addEventListener('click', saveAssignmentUpdate);
+    }
+    
+    // También puedes agregar un botón en la interfaz para ver todas las asignaciones
+    // Por ejemplo, en la sección de horarios:
+    const schedulesSection = document.getElementById('section-schedules');
+    if (schedulesSection) {
+        // Crear botón para ver todas las asignaciones
+        const btnAllAssignments = document.createElement('button');
+        btnAllAssignments.className = 'btn secondary';
+        btnAllAssignments.style.marginLeft = '10px';
+        btnAllAssignments.innerHTML = '<i class="fas fa-list"></i> Ver Todas las Asignaciones';
+        btnAllAssignments.onclick = listAllAssignments;
+        
+        // Insertar después del botón de crear horario
+        const btnCreateSchedule = document.getElementById('btnOpenCreateSchedule');
+        if (btnCreateSchedule && btnCreateSchedule.parentNode) {
+            btnCreateSchedule.parentNode.insertBefore(btnAllAssignments, btnCreateSchedule.nextSibling);
+        }
+    }
 }
 // ========== FUNCIÓN PARA INICIALIZAR ATENDENCIAS ==========
 function initializeAttendance() {
@@ -5914,7 +6370,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeAttendance();
     loadUsersForAttendance();
     loadAttendanceSummary();
-
+    initializeScheduleAssignments(); 
     updateESP32Status();
     setInterval(updateESP32Status, 30000);
     
