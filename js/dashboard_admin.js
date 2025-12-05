@@ -4895,8 +4895,42 @@ function populateUserSelect(users) {
     }
 }
 async function loadAttendanceSummary() {
-    console.log("Cargando resumen de asistencias...");
- 
+    try {
+        console.log("Cargando resumen de asistencias...");
+        
+        // Obtener fecha actual para el resumen
+        const today = new Date().toISOString().split('T')[0];
+        
+        const res = await fetch(`${BASE_URL}/attendance/admin/report?start_date=${today}&end_date=${today}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        
+        if (data.success && data.asistencias) {
+            // Calcular estadísticas
+            const totalHoy = data.asistencias.length;
+            const presentes = data.asistencias.filter(a => a.estado_entrada === 'presente').length;
+            const tardes = data.asistencias.filter(a => a.estado_entrada === 'tarde').length;
+            const enCurso = data.asistencias.filter(a => !a.exit_time).length;
+            
+            // Actualizar UI si existen los elementos
+            const totalElement = document.getElementById('attendanceTotalToday');
+            const presentesElement = document.getElementById('attendancePresentesToday');
+            const tardesElement = document.getElementById('attendanceTardesToday');
+            const enCursoElement = document.getElementById('attendanceEnCursoToday');
+            
+            if (totalElement) totalElement.textContent = totalHoy;
+            if (presentesElement) presentesElement.textContent = presentes;
+            if (tardesElement) tardesElement.textContent = tardes;
+            if (enCursoElement) enCursoElement.textContent = enCurso;
+        }
+        
+    } catch (err) {
+        console.error('Error cargando resumen:', err);
+    }
 }
 document.getElementById('btnLoadAttendance')?.addEventListener('click', loadAttendanceData);
 
