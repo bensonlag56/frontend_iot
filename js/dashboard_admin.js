@@ -41,6 +41,7 @@ function showSection(id) {
     } else if (id === "section-admin-attendances") {
         loadUsersForAttendance();
         loadAttendanceSummary();
+        loadAttendanceData();
     } else if (id === "section-admin-registration") {
         loadAdminInfo();
     }
@@ -67,7 +68,10 @@ function initializeNavigation() {
     }
     const navAttendances = document.getElementById("nav-attendances");
     if (navAttendances) {
-        navAttendances.addEventListener("click", () => showSection("section-admin-attendances"));
+        navAttendances.addEventListener("click", () => {
+            showSection("section-admin-attendances");
+            loadAttendanceData();
+        });
     }
     const navEsp32Control = document.getElementById("nav-esp32-control");
     if (navEsp32Control) {
