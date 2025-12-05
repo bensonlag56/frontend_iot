@@ -2517,7 +2517,7 @@ async function startPhysicalRFIDUpdate(userId, oldRfid, newRfid) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                command: 'UPDATE_RFID',
+                command: 'READ_RFID',
                 user_id: userId,
                 old_rfid: oldRfid,
                 new_rfid: newRfid,
