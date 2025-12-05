@@ -2981,7 +2981,21 @@ async function startPhysicalRFIDUpdate(userId, oldRfid, newRfid) {
 
 async function registerExistingUserFingerprint(userId, huellaId) {
     try {
-       
+        // 1. Obtener IP del ESP32
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            throw new Error('IP del ESP32 no configurada');
+        }
+        
+        // 2. Verificar conexión primero
+        await updateESP32Status();
+        
+        const statusElement = document.getElementById('esp32-status');
+        if (!statusElement || !statusElement.className.includes('status-online')) {
+            throw new Error('ESP32 no conectado. Verifique la conexión.');
+        }
+        
+        // 3. Obtener datos del usuario
         const token = localStorage.getItem("jwtToken");
         const userResponse = await fetch(`${BASE_URL}/users/${userId}`, {
             headers: { "Authorization": "Bearer " + token }
@@ -2993,7 +3007,7 @@ async function registerExistingUserFingerprint(userId, huellaId) {
         
         const userData = await userResponse.json();
         
-        // 3. Mostrar confirmación
+        // 4. Mostrar confirmación
         const confirmResult = await Swal.fire({
             icon: 'info',
             title: 'REGISTRO FÍSICO DE HUELLA',
@@ -3002,14 +3016,8 @@ async function registerExistingUserFingerprint(userId, huellaId) {
                     <p><strong>Usuario:</strong> ${userData.nombre} ${userData.apellido}</p>
                     <p><strong>ID Usuario:</strong> ${userId}</p>
                     <p><strong>Huella ID:</strong> ${huellaId}</p>
-                    <div style="background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                        <p style="margin: 0; color: #0c5460;">
-                            <i class="fas fa-info-circle"></i> 
-                            <strong>NUEVO MÉTODO:</strong> Usando endpoints públicos del backend
-                        </p>
-                    </div>
                     <p style="color: green; margin-top: 10px;">
-                        ✅ El ESP32 puede comunicarse directamente con el backend
+                        ✅ Preparado para registro físico en ESP32
                     </p>
                 </div>
             `,
@@ -3023,31 +3031,16 @@ async function registerExistingUserFingerprint(userId, huellaId) {
             return;
         }
 
-        // 4. PRIMERO enviar comando al ESP32 usando el endpoint de proxy del backend
-        console.log("Enviando comando al ESP32 via proxy...");
+        // 5. Enviar comando al ESP32
+        console.log(`Enviando REGISTER_FINGERPRINT a ESP32 ${esp32IP}...`);
         
-          const commandResponse = await fetch(`http://${esp32IP}/command`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    command: 'REGISTER_FINGERPRINT',
-                    huella_id: huellaId,
-                    user_id: userId,
-                    timestamp: Date.now()
-                }),
-                signal: controller.signal
-                });
+        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, userId, false);
         
-        const proxyData = await commandResponse.json();
-        console.log("Respuesta proxy:", proxyData);
-        
-        if (!proxyData.success) {
-            throw new Error(proxyData.message || 'Error al enviar comando al ESP32');
+        if (!commandResponse || (commandResponse.status !== 'success' && !commandResponse.success)) {
+            throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
         }
 
-        // 5. Monitorear progreso usando endpoints públicos
+        // 6. Monitorear progreso
         let checkCount = 0;
         const maxChecks = 120;
         
@@ -3066,22 +3059,9 @@ async function registerExistingUserFingerprint(userId, huellaId) {
                     
                     <div style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
                         <p style="margin: 0; font-size: 12px; color: #666;">
-                            <i class="fas fa-server"></i> El ESP32 se comunica directamente con: ${BASE_URL}
-                        </p>
-                        <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
                             <i class="fas fa-clock"></i> Tiempo: 
                             <span id="fingerprint-progress">0</span>/${maxChecks} segundos
                         </p>
-                    </div>
-                    
-                    <div style="margin-top: 15px; font-size: 12px; color: #666; text-align: left;">
-                        <p><i class="fas fa-lightbulb"></i> <strong>Proceso automático:</strong></p>
-                        <ol style="margin: 5px 0; padding-left: 20px;">
-                            <li>ESP32 registra la huella físicamente</li>
-                            <li>Envía el template al endpoint público del backend</li>
-                            <li>El backend guarda el template en la base de datos</li>
-                            <li>Se asigna automáticamente al usuario</li>
-                        </ol>
                     </div>
                 </div>
             `,
@@ -3096,13 +3076,13 @@ async function registerExistingUserFingerprint(userId, huellaId) {
                         progressEl.textContent = checkCount;
                     }
                     
-                    // Verificar cada 3 segundos usando endpoint PÚBLICO
+                    // Verificar cada 3 segundos
                     if (checkCount % 3 === 0) {
                         try {
                             console.log(`Verificando huella ${huellaId}...`);
-                            const verifyResponse = await fetch(`${BASE_URL}/users/huella/public/check/${huellaId}`, {
-                                method: 'GET',
-                                headers: {
+                            const verifyResponse = await fetch(`${BASE_URL}/users/huella/check/${huellaId}`, {
+                                headers: { 
+                                    'Authorization': 'Bearer ' + token,
                                     'Content-Type': 'application/json'
                                 }
                             });
@@ -3130,12 +3110,12 @@ async function registerExistingUserFingerprint(userId, huellaId) {
                                                 </div>
                                                 <p><strong>Usuario:</strong> ${userData.nombre} ${userData.apellido}</p>
                                                 <p><strong>Huella ID:</strong> ${huellaId}</p>
-                                                <p><strong>Template:</strong> ${verifyData.template_size} bytes guardados</p>
+                                                <p><strong>Template:</strong> ${verifyData.template_size || '0'} bytes guardados</p>
                                                 <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 15px 0;">
                                                     <p style="margin: 0; color: #155724;">
                                                         <i class="fas fa-check"></i> 
                                                         La huella fue registrada físicamente en el ESP32 y 
-                                                        guardada en la base de datos automáticamente.
+                                                        guardada en la base de datos.
                                                     </p>
                                                 </div>
                                             </div>
@@ -3173,10 +3153,10 @@ async function registerExistingUserFingerprint(userId, huellaId) {
                                                 style="padding: 8px 16px; margin-right: 10px;">
                                             <i class="fas fa-redo"></i> Reintentar
                                         </button>
-                                        <button onclick="testBackendConnection()" 
+                                        <button onclick="updateESP32Status()" 
                                                 class="btn btn-info"
                                                 style="padding: 8px 16px; margin-right: 10px;">
-                                            <i class="fas fa-server"></i> Probar Backend
+                                            <i class="fas fa-wifi"></i> Probar Conexión ESP32
                                         </button>
                                         <button onclick="loadEmployees()" 
                                                 class="btn btn-secondary"
@@ -3210,27 +3190,19 @@ async function registerExistingUserFingerprint(userId, huellaId) {
                 <div style="text-align: left;">
                     <p><strong>Error:</strong> ${err.message}</p>
                     <hr>
-                    <p><strong>Arquitectura utilizada:</strong></p>
-                    <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                        <ol>
-                            <li><strong>Frontend HTTPS</strong> → Backend HTTPS (Render)</li>
-                            <li><strong>Backend HTTPS</strong> → Envía comando al ESP32 via proxy</li>
-                            <li><strong>ESP32 HTTP local</strong> → Backend HTTPS (directo con endpoints públicos)</li>
-                            <li><strong>ESP32</strong> → Registra huella y envía template al backend</li>
-                        </ol>
-                    </div>
-                    <p><strong>Solución:</strong></p>
+                    <p><strong>Solución paso a paso:</strong></p>
                     <ol>
-                        <li>Verifique que el ESP32 pueda alcanzar internet</li>
-                        <li>Verifique que el ESP32 tenga la URL correcta del backend</li>
-                        <li>Pruebe el endpoint público: <code>${BASE_URL}/users/huella/public/check/1</code></li>
-                        <li>Verifique que el backend esté funcionando</li>
+                        <li>Vaya a la sección <strong>"Control ESP32"</strong></li>
+                        <li>Verifique estado: debe decir <strong>"ESP32 CONECTADO"</strong></li>
+                        <li>Si dice desconectado, haga clic en <strong>"Probar Conexión"</strong></li>
+                        <li>Configure IP correcta con <strong>"Configurar IP"</strong></li>
+                        <li>La IP debe ser la que aparece en pantalla del ESP32</li>
                     </ol>
                     <div style="margin-top: 20px;">
-                        <button onclick="testBackendConnection()" 
+                        <button onclick="showSection('section-esp32-control')" 
                                 class="btn btn-primary" 
                                 style="padding: 8px 16px; margin-right: 10px;">
-                            <i class="fas fa-server"></i> Probar Backend
+                            <i class="fas fa-microchip"></i> Ir a Control ESP32
                         </button>
                         <button onclick="registerExistingUserFingerprint(${userId}, ${huellaId})" 
                                 class="btn btn-warning" 
@@ -3238,7 +3210,7 @@ async function registerExistingUserFingerprint(userId, huellaId) {
                             <i class="fas fa-redo"></i> Reintentar
                         </button>
                         <button onclick="loadEmployees()" 
-                                class="btn btn-secondary"
+                                class="btn btn-info"
                                 style="padding: 8px 16px;">
                             <i class="fas fa-sync"></i> Actualizar
                         </button>
@@ -3249,7 +3221,6 @@ async function registerExistingUserFingerprint(userId, huellaId) {
         });
     }
 }
-
 // Función para probar conexión al backend
 async function testBackendConnection() {
     try {
