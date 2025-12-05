@@ -1960,8 +1960,16 @@ async function openEditUserModal(userId) {
         }
         
         document.getElementById('editAreaTrabajo').value = userData.area_trabajo || '';
-        document.getElementById('editHuellaId').value = userData.huella_id || '';
-        document.getElementById('editRfid').value = userData.rfid || '';
+        
+        // Guardar valores antiguos para comparación
+        const huellaInput = document.getElementById('editHuellaId');
+        const rfidInput = document.getElementById('editRfid');
+        
+        huellaInput.value = userData.huella_id || '';
+        huellaInput.setAttribute('data-old-value', userData.huella_id || '');
+        
+        rfidInput.value = userData.rfid || '';
+        rfidInput.setAttribute('data-old-value', userData.rfid || '');
         
         // Manejar el rol
         const roleSelect = document.getElementById('editRole');
@@ -1980,22 +1988,185 @@ async function openEditUserModal(userId) {
         });
     }
 }
+// ========== ACTUALIZAR HUELLA PARA USUARIO EXISTENTE ==========
+async function updateUserFingerprint(userId, oldHuellaId, newHuellaId) {
+    try {
+        console.log(`Actualizando huella para usuario ${userId}: ${oldHuellaId} -> ${newHuellaId}`);
+        
+        await updateESP32Status();
+        
+        const statusElement = document.getElementById('esp32-status');
+        if (statusElement && !statusElement.className.includes('status-online')) {
+            throw new Error('ESP32 no conectado. Verifique la conexión.');
+        }
+        
+        // 1. Primero actualizar en backend
+        const token = localStorage.getItem("jwtToken");
+        const updateResponse = await fetch(`${BASE_URL}/users/${userId}/update-complete`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+                huella_id: newHuellaId
+            })
+        });
+        
+        if (!updateResponse.ok) {
+            throw new Error('Error actualizando huella en backend');
+        }
+        
+        // 2. Enviar comando al ESP32 para registrar nueva huella
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            throw new Error('IP del ESP32 no configurada');
+        }
+        
+        const commandResponse = await fetch(`http://${esp32IP}/update-fingerprint`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                old_huella_id: oldHuellaId,
+                new_huella_id: newHuellaId,
+                user_id: userId
+            })
+        });
+        
+        if (!commandResponse.ok) {
+            throw new Error('Error enviando comando al ESP32');
+        }
+        
+        const commandData = await commandResponse.json();
+        
+        if (commandData.status !== 'success') {
+            throw new Error(commandData.message || 'Error en ESP32');
+        }
+        
+        // 3. Monitorear progreso (similar al registro normal)
+        let checkCount = 0;
+        const maxChecks = 120;
+        
+        await Swal.fire({
+            title: 'ACTUALIZANDO HUELLA',
+            html: `
+                <div style="text-align: center;">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p style="margin-top: 15px;">Registrando nueva huella física...</p>
+                    <p><small>Huella ID: ${newHuellaId}</small></p>
+                    <p><small>Usuario ID: ${userId}</small></p>
+                    <div id="update-fingerprint-progress" style="margin-top: 15px; font-size: 12px;">
+                        Tiempo: 0/${maxChecks} segundos
+                    </div>
+                </div>
+            `,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            width: 400
+        });
+        
+        // 4. Verificar registro (puedes reutilizar la lógica existente)
+        // ... (similar a la función registerFingerprint)
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error actualizando huella:', error);
+        throw error;
+    }
+}
+
+// ========== ACTUALIZAR RFID PARA USUARIO EXISTENTE ==========
+async function updateUserRFID(userId, oldRfid, newRfid) {
+    try {
+        console.log(`Actualizando RFID para usuario ${userId}`);
+        
+        await updateESP32Status();
+        
+        const statusElement = document.getElementById('esp32-status');
+        if (statusElement && !statusElement.className.includes('status-online')) {
+            throw new Error('ESP32 no conectado. Verifique la conexión.');
+        }
+        
+        // 1. Enviar comando al ESP32 para leer nuevo RFID
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            throw new Error('IP del ESP32 no configurada');
+        }
+        
+        const commandResponse = await fetch(`http://${esp32IP}/update-rfid`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                old_rfid: oldRfid,
+                new_rfid: newRfid,
+                user_id: userId
+            })
+        });
+        
+        if (!commandResponse.ok) {
+            throw new Error('Error enviando comando al ESP32');
+        }
+        
+        const commandData = await commandResponse.json();
+        
+        if (commandData.status !== 'success') {
+            throw new Error(commandData.message || 'Error en ESP32');
+        }
+        
+        // 2. Monitorear lectura (similar al registro normal)
+        let checkCount = 0;
+        const maxChecks = 60;
+        
+        await Swal.fire({
+            title: 'ACTUALIZANDO RFID',
+            html: `
+                <div style="text-align: center;">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p style="margin-top: 15px;">Acercar nuevo llavero RFID...</p>
+                    <p><small>Usuario ID: ${userId}</small></p>
+                    <div id="update-rfid-progress" style="margin-top: 15px; font-size: 12px;">
+                        Tiempo: 0/${maxChecks} segundos
+                    </div>
+                </div>
+            `,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            width: 400
+        });
+        
+       
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error actualizando RFID:', error);
+        throw error;
+    }
+}
 
 async function updateUser() {
     try {
         const token = localStorage.getItem("jwtToken");
         const userId = document.getElementById('editUserId').value;
         
+        // Recopilar datos del formulario
         const userData = {
-            username: document.getElementById('editUsername').value,
-            nombre: document.getElementById('editNombre').value,
-            apellido: document.getElementById('editApellido').value,
+            username: document.getElementById('editUsername').value.trim(),
+            nombre: document.getElementById('editNombre').value.trim(),
+            apellido: document.getElementById('editApellido').value.trim(),
             genero: document.getElementById('editGenero').value,
             fecha_nacimiento: document.getElementById('editFechaNacimiento').value || null,
             fecha_contrato: document.getElementById('editFechaContrato').value || null,
-            area_trabajo: document.getElementById('editAreaTrabajo').value || null,
-            huella_id: document.getElementById('editHuellaId').value || null,
-            rfid: document.getElementById('editRfid').value || null
+            area_trabajo: document.getElementById('editAreaTrabajo').value.trim() || null
         };
         
         // Agregar rol si está presente
@@ -2010,7 +2181,33 @@ async function updateUser() {
             userData.password = password;
         }
         
+        // Manejar huella ID
+        const huellaId = document.getElementById('editHuellaId').value;
+        if (huellaId) {
+            userData.huella_id = parseInt(huellaId) || null;
+        } else {
+            userData.huella_id = null;
+        }
+        
+        // Manejar RFID
+        const rfid = document.getElementById('editRfid').value;
+        if (rfid) {
+            userData.rfid = rfid.trim();
+        } else {
+            userData.rfid = null;
+        }
+        
         console.log('Actualizando usuario:', userId, 'con datos:', userData);
+        
+        // Mostrar loading
+        Swal.fire({
+            title: 'Actualizando usuario...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
         
         const res = await fetch(`${BASE_URL}/users/${userId}/update-complete`, {
             method: 'PUT',
@@ -2021,35 +2218,74 @@ async function updateUser() {
             body: JSON.stringify(userData)
         });
         
-        console.log('Respuesta del servidor:', res.status);
+        const responseText = await res.text();
+        console.log('Respuesta cruda:', responseText);
         
-        if (res.ok) {
-            const data = await res.json();
-            console.log('Datos de respuesta:', data);
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            console.error('Error parseando JSON:', e);
+            throw new Error('Respuesta del servidor inválida');
+        }
+        
+        console.log('Datos de respuesta:', data);
+        
+        Swal.close();
+        
+        if (res.ok && data.success) {
+            Toast.fire({
+                icon: 'success',
+                title: 'Usuario actualizado correctamente'
+            });
             
-            if (data.success) {
-                Toast.fire({
-                    icon: 'success',
-                    title: 'Usuario actualizado correctamente'
+            // Cerrar modal
+            closeModal('editUserModal');
+            
+            // Limpiar campos
+            document.getElementById('editPassword').value = '';
+            
+            // Recargar lista de empleados
+            await loadEmployees();
+            
+            // Si se cambió huella o RFID, preguntar si quiere registrar físicamente
+            const oldHuellaId = document.getElementById('editHuellaId').getAttribute('data-old-value');
+            const oldRfid = document.getElementById('editRfid').getAttribute('data-old-value');
+            
+            if (userData.huella_id && userData.huella_id !== oldHuellaId) {
+                // Mostrar opción para registrar huella físicamente
+                const confirm = await Swal.fire({
+                    title: 'Nueva huella asignada',
+                    text: `¿Desea registrar la huella físicamente en el ESP32?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, registrar',
+                    cancelButtonText: 'No, solo asignar ID'
                 });
                 
-                // Cerrar modal
-                closeModal('editUserModal');
-                
-                // Limpiar campos
-                document.getElementById('editPassword').value = '';
-                
-                // Recargar lista de empleados
-                await loadEmployees();
-                
-                return;
-            } else {
-                throw new Error(data.msg || data.message || 'Error desconocido');
+                if (confirm.isConfirmed) {
+                    await registerFingerprint(userId);
+                }
             }
+            
+            if (userData.rfid && userData.rfid !== oldRfid) {
+                // Mostrar opción para registrar RFID físicamente
+                const confirm = await Swal.fire({
+                    title: 'Nuevo RFID asignado',
+                    text: `¿Desea registrar el RFID físicamente en el ESP32?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, registrar',
+                    cancelButtonText: 'No, solo asignar código'
+                });
+                
+                if (confirm.isConfirmed) {
+                    await registerRFID(userId);
+                }
+            }
+            
         } else {
-            const errorText = await res.text();
-            console.error('Error del servidor:', errorText);
-            throw new Error(`Error HTTP ${res.status}: ${errorText}`);
+            throw new Error(data.msg || data.message || 'Error desconocido');
         }
         
     } catch (error) {
@@ -2061,7 +2297,6 @@ async function updateUser() {
         });
     }
 }
-
 // ========== FUNCIÓN PARA SUSPENDER USUARIO ==========
 async function suspendUser(userId) {
     try {
