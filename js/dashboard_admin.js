@@ -2290,51 +2290,16 @@ async function updateUser() {
             userData.huella_id = null;
         }
         
-        // Manejar RFID
+        // Manejar RFID - CORREGIDO
         const rfid = document.getElementById('editRfid').value;
-        // En updateUser(), REEMPLAZA la sección de RFID con esto:
-if (newRfid && newRfid !== oldRfid) {
-    // Mostrar opción para registrar RFID físicamente
-    const confirm = await Swal.fire({
-        title: 'Nuevo RFID asignado',
-        text: `¿Desea registrar físicamente el RFID en el ESP32?`,
-        html: `
-            <div style="text-align: left; font-size: 14px;">
-                <p><strong>Usuario ID:</strong> ${userId}</p>
-                <p><strong>RFID Anterior:</strong> ${oldRfid || 'Ninguno'}</p>
-                <p><strong>RFID Nuevo:</strong> ${newRfid}</p>
-                <p style="color: blue; margin-top: 10px;">
-                    <i class="fas fa-info-circle"></i> El código RFID ya está asignado en la base de datos. 
-                    Ahora necesita registrarlo físicamente en el ESP32.
-                </p>
-                <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                    <p><strong>Instrucciones:</strong></p>
-                    <ol style="margin: 5px 0; padding-left: 20px; font-size: 12px;">
-                        <li>Ir al ESP32</li>
-                        <li>Aparecerá "ESPERANDO RFID"</li>
-                        <li>Acercar llavero/identificación</li>
-                        <li>Esperar sonido de confirmación</li>
-                    </ol>
-                </div>
-            </div>
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, registrar físicamente',
-        cancelButtonText: 'No, solo actualizar código',
-        showDenyButton: true,
-        denyButtonText: 'Cancelar',
-        width: 550
-    });
-    
-    if (confirm.isConfirmed) {
-        // Usar la función para usuarios existentes
-        await registerExistingUserRFID(userId, newRfid);
-    } else if (confirm.isDenied) {
-        // Opción de cancelar (no hacer nada)
-        console.log('Usuario canceló registro físico de RFID');
-    }
-}
+        const oldRfid = document.getElementById('editRfid').getAttribute('data-old-value');
+        
+        // Solo incluir RFID si hay valor
+        if (rfid && rfid.trim() !== '') {
+            userData.rfid = rfid.trim();
+        } else {
+            userData.rfid = null;
+        }
         
         console.log('Actualizando usuario:', userId, 'con datos:', userData);
         
@@ -2389,9 +2354,9 @@ if (newRfid && newRfid !== oldRfid) {
             
             // Si se cambió huella o RFID, preguntar si quiere registrar físicamente
             const oldHuellaId = document.getElementById('editHuellaId').getAttribute('data-old-value');
-            const oldRfid = document.getElementById('editRfid').getAttribute('data-old-value');
+            const oldRfidValue = document.getElementById('editRfid').getAttribute('data-old-value');
             const newHuellaId = userData.huella_id;
-            const newRfid = userData.rfid;
+            const newRfidValue = userData.rfid;
             
             // 1. Para HUELLA - SOLO si el usuario YA tenía una huella (oldHuellaId existe)
             // y cambió a una NUEVA huella
@@ -2428,9 +2393,9 @@ if (newRfid && newRfid !== oldRfid) {
                 }
             }
             
-            // 2. Para RFID - SOLO si el usuario YA tenía un RFID (oldRfid existe)
+            // 2. Para RFID - SOLO si el usuario YA tenía un RFID (oldRfidValue existe)
             // y cambió a un NUEVO RFID
-            if (newRfid && newRfid !== oldRfid) {
+            if (newRfidValue && newRfidValue !== oldRfidValue) {
                 // Mostrar opción para registrar RFID físicamente
                 const confirm = await Swal.fire({
                     title: 'Nuevo RFID asignado',
@@ -2438,11 +2403,21 @@ if (newRfid && newRfid !== oldRfid) {
                     html: `
                         <div style="text-align: left; font-size: 14px;">
                             <p><strong>Usuario ID:</strong> ${userId}</p>
-                            <p><strong>RFID Anterior:</strong> ${oldRfid || 'Ninguno'}</p>
-                            <p><strong>RFID Nuevo:</strong> ${newRfid}</p>
+                            <p><strong>RFID Anterior:</strong> ${oldRfidValue || 'Ninguno'}</p>
+                            <p><strong>RFID Nuevo:</strong> ${newRfidValue}</p>
                             <p style="color: blue; margin-top: 10px;">
-                                <i class="fas fa-info-circle"></i> El código RFID ya está asignado en la base de datos. Ahora necesita registrarlo físicamente en el ESP32.
+                                <i class="fas fa-info-circle"></i> El código RFID ya está asignado en la base de datos. 
+                                Ahora necesita registrarlo físicamente en el ESP32.
                             </p>
+                            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                                <p><strong>Instrucciones:</strong></p>
+                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 12px;">
+                                    <li>Ir al ESP32</li>
+                                    <li>Aparecerá "ESPERANDO RFID"</li>
+                                    <li>Acercar llavero/identificación</li>
+                                    <li>Esperar sonido de confirmación</li>
+                                </ol>
+                            </div>
                         </div>
                     `,
                     icon: 'question',
@@ -2450,13 +2425,13 @@ if (newRfid && newRfid !== oldRfid) {
                     confirmButtonText: 'Sí, registrar físicamente',
                     cancelButtonText: 'No, solo actualizar código',
                     showDenyButton: true,
-                    denyButtonText: 'Cancelar todo',
-                    width: 500
+                    denyButtonText: 'Cancelar',
+                    width: 550
                 });
                 
                 if (confirm.isConfirmed) {
-                    // Usar la NUEVA función para usuarios existentes
-                    await registerExistingUserRFID(userId, newRfid);
+                    // Usar la función para usuarios existentes
+                    await registerExistingUserRFID(userId, newRfidValue);
                 } else if (confirm.isDenied) {
                     // Opción de cancelar (no hacer nada)
                     console.log('Usuario canceló registro físico de RFID');
