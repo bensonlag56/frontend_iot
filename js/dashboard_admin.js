@@ -1555,39 +1555,42 @@ async function updateESP32Status() {
             return;
         }
 
-        const esp32Url = `http://${esp32IP}`;
-        console.log("Probando conexión a:", esp32Url);
-        
-        // Intentar con timeout corto
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        
-        const response = await fetch(`${esp32Url}/status`, {
-            signal: controller.signal
+        // USAR EL PROXY EN VEZ DE CONEXIÓN DIRECTA
+        const response = await fetch(`${BASE_URL}/esp32/proxy/status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
+            },
+            body: JSON.stringify({
+                esp32_ip: esp32IP
+            })
         });
-        
-        clearTimeout(timeoutId);
         
         if (response.ok) {
             const data = await response.json();
             
-            statusElement.innerHTML =
-                ` ESP32 CONECTADO<br>` +
-                ` IP: ${esp32IP}<br>` +
-                ` Estado: ${data.status}<br>` +
-                ` Sistema: ${data.sistema_listo ? '✅ Listo' : '❌ No listo'}`;
-            statusElement.className = 'status-box status-online';
+            if (data.success && data.status === 'online') {
+                statusElement.innerHTML =
+                    ` ESP32 CONECTADO<br>` +
+                    ` IP: ${esp32IP}<br>` +
+                    ` Estado: ${data.esp32_data?.status || 'Conectado'}<br>` +
+                    ` Sistema: ${data.esp32_data?.sistema_listo ? '✅ Listo' : '❌ No listo'}`;
+                statusElement.className = 'status-box status-online';
 
-            if (infoElement) {
-                infoElement.innerHTML = `
-                    <p><strong>Conexión:</strong> Local (Red WiFi)</p>
-                    <p><strong>IP:</strong> ${data.ip}</p>
-                    <p><strong>Registro activo:</strong> ${data.registro_activo ? '✅ Sí' : '❌ No'}</p>
-                    <p><strong>RFID activo:</strong> ${data.lectura_rfid_activa ? '✅ Sí' : '❌ No'}</p>
-                `;
+                if (infoElement && data.esp32_data) {
+                    infoElement.innerHTML = `
+                        <p><strong>Conexión:</strong> Via Proxy (Backend)</p>
+                        <p><strong>IP:</strong> ${data.esp32_data.ip || esp32IP}</p>
+                        <p><strong>Registro activo:</strong> ${data.esp32_data.registro_activo ? '✅ Sí' : '❌ No'}</p>
+                        <p><strong>RFID activo:</strong> ${data.esp32_data.lectura_rfid_activa ? '✅ Sí' : '❌ No'}</p>
+                    `;
+                }
+            } else {
+                throw new Error(data.message || 'ESP32 offline');
             }
         } else {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(`Error del proxy: ${response.status}`);
         }
         
     } catch (error) {
@@ -1598,7 +1601,7 @@ async function updateESP32Status() {
         statusElement.innerHTML =
             ` ESP32 DESCONECTADO<br>` +
             ` IP: ${esp32IP || 'No configurada'}<br>` +
-            ` Error: ${error.name === 'AbortError' ? 'Timeout (5s)' : error.message}`;
+            ` Error: ${error.message}`;
         statusElement.className = 'status-box status-offline';
     }
 }
