@@ -4509,8 +4509,6 @@ async function sendFingerprintRegistrationCommand(huellaId, userId) {
     }
 }
 
-// Verifica si la huella se registró físicamente en el ESP32
-// ========== FUNCIÓN MODIFICADA PARA VERIFICAR HUELLA ==========
 async function verifyFingerprintOnESP32(huellaId) {
     const esp32IP = localStorage.getItem('esp32_ip');
     if (!esp32IP) {
