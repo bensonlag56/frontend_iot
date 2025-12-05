@@ -5668,58 +5668,73 @@ async function endAssignments(scheduleId) {
         });
     }
 }
-async function forceDeleteSchedule(scheduleId) {
+async function deleteSchedule(scheduleId) {
     try {
-        const confirm = await Swal.fire({
-            title: '¿Eliminar forzadamente?',
-            html: `
-                <div style="text-align: left; color: #dc3545; font-size: 14px;">
-                    <p><i class="fas fa-exclamation-triangle"></i> <strong>ADVERTENCIA:</strong></p>
-                    <p>Se eliminarán TODAS las asignaciones asociadas a este horario.</p>
-                    <p>Los usuarios afectados quedarán sin horario asignado.</p>
-                    <p>Esta acción NO se puede deshacer.</p>
-                </div>
-            `,
+        const confirmResult = await Swal.fire({
+            title: '¿Eliminar horario?',
+            text: 'Esta acción no se puede deshacer.',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#dc3545',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, eliminar todo',
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
             cancelButtonText: 'Cancelar'
         });
         
-        if (!confirm.isConfirmed) return;
+        if (!confirmResult.isConfirmed) return;
         
-        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}/force`, {
-            method: 'DELETE',
+        console.log(`Intentando DELETE a: ${BASE_URL}/schedules/${scheduleId}`);
+        
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
+            method: "DELETE",
             headers: getAuthHeaders()
         });
         
-        const data = await res.json();
+        console.log("Status respuesta:", res.status);
         
-        if (!res.ok || !data.success) {
-            throw new Error(data.msg || 'Error en eliminación forzada');
+        if (res.status === 400) {
+            // Hay asignaciones activas - usar SOLO opción de eliminar forzadamente
+            await Swal.fire({
+                title: 'Asignaciones activas encontradas',
+                text: 'El horario tiene usuarios asignados activamente.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Eliminar forzadamente',
+                cancelButtonText: 'Cancelar'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    // Usar el endpoint DELETE principal con parámetro
+                    await fetch(`${BASE_URL}/schedules/${scheduleId}?force=true`, {
+                        method: "DELETE",
+                        headers: getAuthHeaders()
+                    });
+                    
+                    Toast.fire({ 
+                        icon: 'success', 
+                        title: 'Horario eliminado forzadamente' 
+                    });
+                    loadSchedules();
+                }
+            });
+            return;
         }
         
-        await Swal.fire({
-            icon: 'success',
-            title: '¡Eliminado!',
-            html: `
-                <div style="text-align: left; font-size: 14px;">
-                    <p>${data.msg}</p>
-                    <p><strong>Horario ID:</strong> ${scheduleId}</p>
-                    <p><strong>Todas las asignaciones han sido eliminadas.</strong></p>
-                </div>
-            `
+        if (!res.ok) {
+            throw new Error(`Error ${res.status}`);
+        }
+        
+        Toast.fire({ 
+            icon: 'success', 
+            title: 'Horario eliminado correctamente' 
         });
         
         loadSchedules();
         
     } catch (err) {
-        await Swal.fire({
-            icon: 'error',
-            title: 'Error en eliminación forzada',
-            text: err.message
+        console.error("Error eliminando horario:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error al eliminar horario' 
         });
     }
 }
