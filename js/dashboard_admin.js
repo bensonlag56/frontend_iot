@@ -6201,10 +6201,16 @@ async function listAllAssignments() {
         });
         
         if (!res.ok) {
-            throw new Error('Error cargando asignaciones');
+            const errorData = await res.json();
+            console.error('Error del servidor:', errorData);
+            throw new Error(errorData.msg || 'Error cargando asignaciones');
         }
         
         const data = await res.json();
+        
+        if (!data.success) {
+            throw new Error(data.msg || 'Error en la respuesta');
+        }
         
         // Crear modal para mostrar todas las asignaciones
         let assignmentsHtml = `
@@ -6216,44 +6222,48 @@ async function listAllAssignments() {
         
         if (data.assignments && data.assignments.length > 0) {
             assignmentsHtml += `
-                <div class="table-responsive">
-                    <table class="assignments-table">
+                <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
                         <thead>
-                            <tr>
-                                <th>Usuario</th>
-                                <th>Horario</th>
-                                <th>Fecha Inicio</th>
-                                <th>Fecha Fin</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
+                            <tr style="background: #f8f9fa; position: sticky; top: 0;">
+                                <th style="padding: 10px; border: 1px solid #ddd;">Usuario</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Horario</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Fecha Inicio</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Fecha Fin</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Estado</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
             `;
             
             data.assignments.forEach(assignment => {
+                const statusClass = assignment.is_active ? 'status-active' : 'status-inactive';
+                const statusText = assignment.is_active ? 'Activa' : 'Inactiva';
+                
                 assignmentsHtml += `
                     <tr>
-                        <td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">
                             <div style="font-weight: 500;">${assignment.user_name}</div>
                             <small style="color: #666;">@${assignment.username}</small>
                         </td>
-                        <td>${assignment.schedule_name}</td>
-                        <td>${assignment.start_date || 'N/A'}</td>
-                        <td>${assignment.end_date || 'Sin fecha fin'}</td>
-                        <td>
-                            <span class="${assignment.is_active ? 'status-active' : 'status-inactive'}">
-                                ${assignment.is_active ? 'Activa' : 'Inactiva'}
+                        <td style="padding: 8px; border: 1px solid #ddd;">${assignment.schedule_name}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">${assignment.start_date || 'N/A'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">${assignment.end_date || 'Sin fecha fin'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">
+                            <span style="padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; 
+                                   ${statusClass === 'status-active' ? 'background: #d4edda; color: #155724;' : 'background: #f8d7da; color: #721c24;'}">
+                                ${statusText}
                             </span>
                         </td>
-                        <td>
-                            <div class="assignment-actions">
+                        <td style="padding: 8px; border: 1px solid #ddd;">
+                            <div style="display: flex; gap: 5px;">
                                 <button onclick="openUpdateAssignmentModal(${assignment.schedule_id}, ${assignment.user_id}, '${assignment.start_date}', '${assignment.end_date || ''}')" 
-                                        class="btn-update-assignment">
+                                        style="background: #17a2b8; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button onclick="deleteUserAssignment(${assignment.schedule_id}, ${assignment.user_id}, '${assignment.user_name}')" 
-                                        class="btn-delete-assignment">
+                                <button onclick="deleteAssignmentById(${assignment.assignment_id}, '${assignment.user_name}')" 
+                                        style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
