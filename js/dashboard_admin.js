@@ -5405,61 +5405,69 @@ async function deleteSchedule(scheduleId) {
     try {
         const confirmResult = await Swal.fire({
             title: '¿Eliminar horario?',
-            html: `
-                <div style="text-align: left; font-size: 14px;">
-                    <p>Esta acción no se puede deshacer.</p>
-                    <p style="color: #dc3545; font-weight: bold;">
-                        <i class="fas fa-exclamation-triangle"></i> 
-                        Si existen asignaciones activas, no se podrá eliminar.
-                    </p>
-                </div>
-            `,
+            text: 'Esta acción no se puede deshacer.',
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, intentar eliminar',
+            confirmButtonText: 'Sí, eliminar',
             cancelButtonText: 'Cancelar'
         });
         
         if (!confirmResult.isConfirmed) return;
+        
+        console.log(`Intentando DELETE a: ${BASE_URL}/schedules/${scheduleId}`);
         
         const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
             method: "DELETE",
             headers: getAuthHeaders()
         });
         
-        if (!res.ok) {
+        console.log("Status respuesta:", res.status);
+        
+        if (res.status === 400) {
+            // Hay asignaciones activas - mostrar opciones
             const errorData = await res.json();
-            
-            // Si hay asignaciones activas, mostrar opciones
-            if (errorData.msg && errorData.msg.includes('asignaciones activas')) {
-                await handleActiveAssignments(scheduleId);
-                return;
-            }
-            
-            throw new Error(errorData.msg || errorData.message || `Error ${res.status}`);
+            console.log("Error 400 - Asignaciones activas:", errorData);
+            await handleActiveAssignments(scheduleId);
+            return;
         }
+        
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error("Error response:", errorText);
+            throw new Error(`Error ${res.status}: ${errorText}`);
+        }
+        
+        const data = await res.json();
         
         Toast.fire({ 
             icon: 'success', 
-            title: 'Horario eliminado correctamente' 
+            title: data.msg || 'Horario eliminado correctamente' 
         });
         
         loadSchedules();
         
     } catch (err) {
         console.error("Error eliminando horario:", err);
-        Toast.fire({ 
-            icon: 'error', 
-            title: 'Error al eliminar horario: ' + err.message 
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'Error al eliminar horario',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <p><strong>Detalles:</strong> Consola del navegador (F12)</p>
+                </div>
+            `,
+            width: 500
         });
     }
 }
 
 async function handleActiveAssignments(scheduleId) {
-    // Primero obtenemos información del horario y sus asignaciones
     try {
+        // Primero obtener información del horario
         const scheduleRes = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
             headers: getAuthHeaders()
         });
@@ -5467,7 +5475,7 @@ async function handleActiveAssignments(scheduleId) {
         if (!scheduleRes.ok) throw new Error('Error obteniendo horario');
         const schedule = await scheduleRes.json();
         
-        // Obtener horarios disponibles para reasignar
+        // Obtener todos los horarios disponibles
         const schedulesRes = await fetch(`${BASE_URL}/schedules/`, {
             headers: getAuthHeaders()
         });
@@ -5478,11 +5486,12 @@ async function handleActiveAssignments(scheduleId) {
         // Filtrar el horario actual
         const otherSchedules = allSchedules.filter(s => s.id != scheduleId);
         
+        // Mostrar opciones
         const result = await Swal.fire({
             title: 'Horario tiene asignaciones activas',
             html: `
                 <div style="text-align: left; font-size: 14px;">
-                    <p><strong>Horario:</strong> ${schedule.nombre}</p>
+                    <p><strong>Horario:</strong> ${schedule.nombre} (ID: ${scheduleId})</p>
                     <p style="color: #dc3545;">
                         <i class="fas fa-exclamation-triangle"></i> 
                         No se puede eliminar porque hay usuarios asignados.
@@ -5513,7 +5522,7 @@ async function handleActiveAssignments(scheduleId) {
             // Opción 1: Reasignar usuarios
             await reassignScheduleUsers(scheduleId, schedule, otherSchedules);
         } else if (result.isDenied) {
-            // Opción 2: Terminar asignaciones (cambiar fecha fin a hoy)
+            // Opción 2: Terminar asignaciones
             await endAssignments(scheduleId);
         } else if (result.dismiss === Swal.DismissReason.cancel) {
             // Opción 3: Eliminar forzadamente
@@ -5530,7 +5539,16 @@ async function handleActiveAssignments(scheduleId) {
 }
 
 async function reassignScheduleUsers(scheduleId, currentSchedule, otherSchedules) {
-    // Crear lista de opciones para el select
+    if (otherSchedules.length === 0) {
+        await Swal.fire({
+            icon: 'error',
+            title: 'No hay otros horarios',
+            text: 'Primero debe crear otro horario para reasignar usuarios.'
+        });
+        return;
+    }
+    
+    // Crear lista de opciones
     let optionsHtml = '<option value="">Seleccionar nuevo horario</option>';
     otherSchedules.forEach(s => {
         optionsHtml += `<option value="${s.id}">${s.nombre} (${s.hora_entrada} - ${s.hora_salida})</option>`;
@@ -5566,23 +5584,37 @@ async function reassignScheduleUsers(scheduleId, currentSchedule, otherSchedules
     try {
         const res = await fetch(`${BASE_URL}/schedules/${scheduleId}/reassign`, {
             method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ new_schedule_id: newScheduleId })
+            headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ new_schedule_id: parseInt(newScheduleId) })
         });
         
-        if (!res.ok) throw new Error('Error en reasignación');
+        const data = await res.json();
         
-        Toast.fire({
+        if (!res.ok || !data.success) {
+            throw new Error(data.msg || 'Error en reasignación');
+        }
+        
+        await Swal.fire({
             icon: 'success',
-            title: 'Usuarios reasignados y horario eliminado'
+            title: '¡Éxito!',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p>${data.msg}</p>
+                    <p><strong>Usuarios reasignados:</strong> ${data.reassigned_count || 0}</p>
+                </div>
+            `
         });
         
         loadSchedules();
         
     } catch (err) {
-        Toast.fire({
+        await Swal.fire({
             icon: 'error',
-            title: 'Error en reasignación: ' + err.message
+            title: 'Error en reasignación',
+            text: err.message
         });
     }
 }
@@ -5600,25 +5632,42 @@ async function endAssignments(scheduleId) {
         
         if (!confirm.isConfirmed) return;
         
-        // Llamar a endpoint para terminar asignaciones
         const res = await fetch(`${BASE_URL}/schedules/${scheduleId}/end-assignments`, {
             method: 'POST',
             headers: getAuthHeaders()
         });
         
-        if (!res.ok) throw new Error('Error terminando asignaciones');
+        const data = await res.json();
         
-        // Ahora eliminar el horario
+        if (!res.ok || !data.success) {
+            throw new Error(data.msg || 'Error terminando asignaciones');
+        }
+        
+        await Swal.fire({
+            icon: 'success',
+            title: '¡Asignaciones terminadas!',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p>${data.msg}</p>
+                    <p><strong>Asignaciones terminadas:</strong> ${data.ended_count || 0}</p>
+                    <p style="color: green; margin-top: 10px;">
+                        Ahora puede eliminar el horario normalmente.
+                    </p>
+                </div>
+            `
+        });
+        
+        // Ahora intentar eliminar el horario nuevamente
         await deleteSchedule(scheduleId);
         
     } catch (err) {
-        Toast.fire({
+        await Swal.fire({
             icon: 'error',
-            title: 'Error: ' + err.message
+            title: 'Error',
+            text: err.message
         });
     }
 }
-
 async function forceDeleteSchedule(scheduleId) {
     try {
         const confirm = await Swal.fire({
@@ -5646,19 +5695,31 @@ async function forceDeleteSchedule(scheduleId) {
             headers: getAuthHeaders()
         });
         
-        if (!res.ok) throw new Error('Error en eliminación forzada');
+        const data = await res.json();
         
-        Toast.fire({
+        if (!res.ok || !data.success) {
+            throw new Error(data.msg || 'Error en eliminación forzada');
+        }
+        
+        await Swal.fire({
             icon: 'success',
-            title: 'Horario y asignaciones eliminados'
+            title: '¡Eliminado!',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p>${data.msg}</p>
+                    <p><strong>Horario ID:</strong> ${scheduleId}</p>
+                    <p><strong>Todas las asignaciones han sido eliminadas.</strong></p>
+                </div>
+            `
         });
         
         loadSchedules();
         
     } catch (err) {
-        Toast.fire({
+        await Swal.fire({
             icon: 'error',
-            title: 'Error: ' + err.message
+            title: 'Error en eliminación forzada',
+            text: err.message
         });
     }
 }
