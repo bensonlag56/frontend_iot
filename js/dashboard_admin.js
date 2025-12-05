@@ -4103,135 +4103,145 @@ async function registerFingerprint(userId) {
     try {
         console.log("Iniciando registro de huella para usuario:", userId);
         
+        // 1. Verificar conexión con ESP32 primero
         await updateESP32Status();
         
-        // Asignar ID de huella
-        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-id`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
-            },
-            body: JSON.stringify({ user_id: userId })
-        });
-
-        if (!assignResponse.ok) throw new Error('Error asignando ID');
-        
-        const assignData = await assignResponse.json();
-        if (!assignData.success) {
-            Toast.fire({ icon: 'error', title: "Error: " + (assignData.message || "No se pudo asignar ID") });
+        const statusElement = document.getElementById('esp32-status');
+        if (statusElement && !statusElement.className.includes('status-online')) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'ESP32 no conectado',
+                text: 'Verifique la conexión con el ESP32 antes de continuar',
+                confirmButtonText: 'OK'
+            });
             return;
         }
-
-        const huellaId = assignData.huella_id;
         
-        // Asociar al usuario
-        const assignHuellaResponse = await fetch(`${BASE_URL}/users/huella/assign-manual`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + localStorage.getItem("jwtToken")
-            },
-            body: JSON.stringify({ user_id: userId, huella_id: huellaId })
+        // 2. Obtener datos del usuario para mostrar información
+        const token = localStorage.getItem("jwtToken");
+        const userResponse = await fetch(`${BASE_URL}/users/${userId}`, {
+            headers: { "Authorization": "Bearer " + token }
         });
-
-        if (!assignHuellaResponse.ok) throw new Error('Error asociando huella');
         
-        await loadEmployees();
+        if (!userResponse.ok) {
+            throw new Error('Error obteniendo datos del usuario');
+        }
         
-        // Confirmación
+        const userData = await userResponse.json();
+        
+        // 3. Mostrar confirmación ANTES de asignar ID
         const confirmResult = await Swal.fire({
             icon: 'info',
-            title: 'REGISTRO DE HUELLA',
+            title: 'REGISTRO FÍSICO DE HUELLA',
             html: `
                 <div style="text-align: left; font-size: 14px;">
-                    <p><strong>Huella ID Asignado:</strong> ${huellaId}</p>
-                    <p style="color: green;">✅ Preparado para registro físico</p>
+                    <p><strong>Usuario:</strong> ${userData.nombre} ${userData.apellido}</p>
+                    <p><strong>ID Usuario:</strong> ${userId}</p>
                     <hr>
-                    <p><strong>Instrucciones:</strong></p>
+                    <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                        <p style="margin: 0; color: #856404;">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <strong>IMPORTANTE:</strong> Primero se registrará la huella físicamente en el ESP32.
+                        </p>
+                    </div>
+                    <p style="color: green; margin-top: 10px;">
+                        ✅ Preparado para registro físico
+                    </p>
+                    <hr>
+                    <p><strong>Instrucciones paso a paso:</strong></p>
                     <ol>
+                        <li>El sistema generará un ID temporal para esta huella</li>
                         <li>Diríjase al dispositivo ESP32</li>
                         <li>Espere que aparezca "REGISTRO REMOTO"</li>
-                        <li>Siga las instrucciones en pantalla</li>
+                        <li>Siga las instrucciones en pantalla del ESP32</li>
                         <li>Coloque el dedo cuando se lo indique</li>
+                        <li>Una vez completado, el sistema guardará automáticamente</li>
                     </ol>
+                    <p style="color: blue; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i> Solo después del registro físico exitoso se asignará al usuario.
+                    </p>
                 </div>
             `,
             showCancelButton: true,
-            confirmButtonText: 'Continuar',
-            cancelButtonText: 'Cancelar'
+            confirmButtonText: 'Iniciar Registro Físico',
+            cancelButtonText: 'Cancelar',
+            width: 550
         });
 
-        if (!confirmResult.isConfirmed) return;
+        if (!confirmResult.isConfirmed) {
+            return;
+        }
 
-        // Enviar comando
-        const commandResponse = await sendCommandToESP32Direct('REGISTER_FINGERPRINT', huellaId, userId,);
+        // 4. Generar ID de huella temporal (solo para esta sesión)
+        const huellaId = generateTemporaryFingerprintId();
+        console.log("ID de huella temporal generado:", huellaId);
+        
+        // 5. Enviar comando al ESP32 para registrar físicamente
+        const commandResponse = await sendFingerprintRegistrationCommand(huellaId, userId);
         
         if (!commandResponse || commandResponse.status !== 'success') {
             throw new Error(commandResponse?.message || 'Error enviando comando al ESP32');
         }
 
-        // Monitorear
+        // 6. Monitorear registro físico
         let checkCount = 0;
-        const maxChecks = 120;
+        const maxChecks = 120; // 120 segundos máximo
         
         await Swal.fire({
-            title: 'REGISTRO EN PROGRESO',
+            title: 'REGISTRO FÍSICO EN PROGRESO',
             html: `
                 <div style="text-align: center;">
-                    <div class="spinner-border text-primary" role="status">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                         <span class="visually-hidden">Cargando...</span>
                     </div>
-                    <p style="margin-top: 15px;">Esperando registro físico...</p>
-                    <p><small>Huella ID: ${huellaId}</small></p>
-                    <p><small>Usuario ID: ${userId}</small></p>
-                    <div id="fingerprint-progress" style="margin-top: 15px; font-size: 12px;">
-                        Tiempo: 0/${maxChecks} segundos
+                    <p style="margin-top: 15px; font-size: 16px;">
+                        <strong>Registrando huella en el dispositivo...</strong>
+                    </p>
+                    <p><small>Usuario: ${userData.nombre} ${userData.apellido}</small></p>
+                    <p><small>ID Huella Temporal: ${huellaId}</small></p>
+                    
+                    <div style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                        <p style="margin: 0; font-size: 12px; color: #666;">
+                            <i class="fas fa-clock"></i> Tiempo: 
+                            <span id="fingerprint-timer">0</span>/${maxChecks} segundos
+                        </p>
+                    </div>
+                    
+                    <div style="margin-top: 15px; font-size: 12px; color: #666; text-align: left;">
+                        <p><i class="fas fa-check-circle" style="color: green;"></i> <strong>En el ESP32 debe:</strong></p>
+                        <ul style="margin: 5px 0; padding-left: 20px;">
+                            <li>Aparecer "REGISTRO REMOTO"</li>
+                            <li>Seguir instrucciones en pantalla</li>
+                            <li>Colocar dedo cuando se indique</li>
+                            <li>Esperar confirmación visual/sonora</li>
+                        </ul>
                     </div>
                 </div>
             `,
             showConfirmButton: false,
             allowOutsideClick: false,
+            width: 500,
             willOpen: () => {
                 const progressInterval = setInterval(async () => {
                     checkCount++;
-                    const progressEl = document.getElementById('fingerprint-progress');
-                    if (progressEl) {
-                        progressEl.innerHTML = `Tiempo: ${checkCount}/${maxChecks} segundos`;
+                    const timerEl = document.getElementById('fingerprint-timer');
+                    if (timerEl) {
+                        timerEl.textContent = checkCount;
                     }
                     
-                    // Verificar
-                    if (checkCount % 2 === 0) {
+                    // Verificar cada 3 segundos si el ESP32 completó el registro
+                    if (checkCount % 3 === 0) {
                         try {
-                            const verifyResponse = await fetch(`${BASE_URL}/users/huella/check/${huellaId}`, {
-                                headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
-                            });
+                            // Verificar en ESP32 si la huella se registró físicamente
+                            const verification = await verifyFingerprintOnESP32(huellaId);
                             
-                            if (verifyResponse.ok) {
-                                const verifyData = await verifyResponse.json();
+                            if (verification && verification.registered) {
+                                clearInterval(progressInterval);
+                                Swal.close();
                                 
-                                if (verifyData.success && verifyData.exists && verifyData.has_template) {
-                                    clearInterval(progressInterval);
-                                    Swal.close();
-                                    
-                                    await loadEmployees();
-                                    
-                                    Swal.fire({
-                                        icon: 'success',
-                                        title: '¡HUELLA REGISTRADA!',
-                                        html: `
-                                            <div style="text-align: left;">
-                                                <p><strong>Huella ID:</strong> ${huellaId}</p>
-                                                <p><strong>Estado:</strong> Template guardado correctamente</p>
-                                                <p style="color: green; margin-top: 10px;">
-                                                    ✅ El usuario puede acceder con su huella
-                                                </p>
-                                            </div>
-                                        `,
-                                        confirmButtonText: 'Aceptar'
-                                    });
-                                    return;
-                                }
+                                // 7. SOLO AHORA asignar el ID al usuario en la base de datos
+                                await assignFingerprintToUserAfterVerification(userId, huellaId, verification);
+                                return;
                             }
                         } catch (error) {
                             console.error("Error verificando:", error);
@@ -4246,18 +4256,38 @@ async function registerFingerprint(userId) {
                             title: 'Tiempo agotado',
                             html: `
                                 <div style="text-align: left;">
-                                    <p>No se completó el registro en el tiempo esperado.</p>
-                                    <p><strong>Verifique:</strong></p>
+                                    <p>No se completó el registro físico en ${maxChecks} segundos.</p>
+                                    <p><strong>¿Qué puede haber ocurrido?</strong></p>
                                     <ul>
-                                        <li>Que el ESP32 esté encendido</li>
-                                        <li>Que siguió las instrucciones en pantalla</li>
-                                        <li>Que colocó correctamente el dedo</li>
+                                        <li>El registro físico no se completó correctamente</li>
+                                        <li>No se colocó el dedo correctamente</li>
+                                        <li>El sensor no leyó la huella</li>
+                                        <li>Problemas de conexión con el ESP32</li>
                                     </ul>
+                                    <p style="margin-top: 15px;">
+                                        <strong>IMPORTANTE:</strong> La huella NO se ha asignado al usuario.
+                                    </p>
+                                    <div style="margin-top: 20px;">
+                                        <button onclick="registerFingerprint(${userId})" 
+                                                class="btn btn-primary" 
+                                                style="padding: 8px 16px; margin-right: 10px;">
+                                            <i class="fas fa-redo"></i> Reintentar Registro
+                                        </button>
+                                        <button onclick="showSection('section-esp32-control')" 
+                                                class="btn btn-secondary"
+                                                style="padding: 8px 16px; margin-right: 10px;">
+                                            <i class="fas fa-microchip"></i> Verificar ESP32
+                                        </button>
+                                        <button onclick="loadEmployees()" 
+                                                class="btn btn-info"
+                                                style="padding: 8px 16px;">
+                                            <i class="fas fa-sync"></i> Actualizar Lista
+                                        </button>
+                                    </div>
                                 </div>
                             `,
-                            confirmButtonText: 'Entendido'
-                        }).then(() => {
-                            loadEmployees();
+                            confirmButtonText: 'Cerrar',
+                            width: 600
                         });
                     }
                 }, 1000);
@@ -4280,18 +4310,186 @@ async function registerFingerprint(userId) {
                 <div style="text-align: left;">
                     <p><strong>Error:</strong> ${err.message}</p>
                     <hr>
-                    <p><strong>Posibles soluciones:</strong></p>
+                    <p><strong>Solución paso a paso:</strong></p>
                     <ol>
-                        <li>Verifique la conexión con el ESP32</li>
-                        <li>Asegúrese que el ESP32 esté encendido</li>
-                        <li>Revise la IP configurada</li>
+                        <li>Vaya a la sección <strong>"Control ESP32"</strong></li>
+                        <li>Verifique que el estado diga <strong>"ESP32 CONECTADO"</strong></li>
+                        <li>Si dice desconectado, haga clic en <strong>"Probar Conexión"</strong></li>
+                        <li>Configure la IP correcta con <strong>"Configurar IP"</strong></li>
+                        <li>La IP debe ser la misma que aparece en la pantalla del ESP32</li>
                     </ol>
-                    <button onclick="loadEmployees()" class="btn btn-primary mt-3">
-                        Actualizar Tabla
-                    </button>
+                    <div style="margin-top: 20px;">
+                        <button onclick="showSection('section-esp32-control')" 
+                                class="btn btn-primary" 
+                                style="padding: 8px 16px; margin-right: 10px;">
+                            <i class="fas fa-microchip"></i> Ir a Control ESP32
+                        </button>
+                        <button onclick="registerFingerprint(${userId})" 
+                                class="btn btn-warning" 
+                                style="padding: 8px 16px;">
+                            <i class="fas fa-redo"></i> Reintentar
+                        </button>
+                    </div>
                 </div>
-            `
+            `,
+            width: 600
         });
+    }
+}
+
+// ========== FUNCIONES AUXILIARES PARA EL NUEVO FLUJO ==========
+
+// Genera un ID temporal para la huella
+function generateTemporaryFingerprintId() {
+    // Genera un número entre 1 y 127 (rango común de huellas)
+    return Math.floor(Math.random() * 127) + 1;
+}
+
+// Envía comando al ESP32 para registrar huella
+async function sendFingerprintRegistrationCommand(huellaId, userId) {
+    const esp32IP = localStorage.getItem('esp32_ip');
+    if (!esp32IP) {
+        throw new Error('IP del ESP32 no configurada');
+    }
+
+    console.log(`Enviando comando REGISTER_FINGERPRINT a ESP32 ${esp32IP}...`);
+    
+    try {
+        const response = await fetch(`http://${esp32IP}/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                command: 'REGISTER_FINGERPRINT',
+                huella_id: huellaId,
+                user_id: userId,
+                timestamp: Date.now(),
+                source: 'admin_dashboard'
+            }),
+            signal: AbortSignal.timeout(10000)
+        });
+        
+        if (response.ok) {
+            return await response.json();
+        } else {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        console.error("Error enviando comando al ESP32:", error);
+        throw new Error('No se pudo conectar al ESP32 para registro de huella');
+    }
+}
+
+// Verifica si la huella se registró físicamente en el ESP32
+async function verifyFingerprintOnESP32(huellaId) {
+    const esp32IP = localStorage.getItem('esp32_ip');
+    if (!esp32IP) {
+        throw new Error('IP del ESP32 no configurada');
+    }
+
+    try {
+        const response = await fetch(`http://${esp32IP}/verify-fingerprint/${huellaId}`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(5000)
+        });
+        
+        if (response.ok) {
+            return await response.json();
+        }
+        return null;
+    } catch (error) {
+        console.error("Error verificando huella en ESP32:", error);
+        return null;
+    }
+}
+
+// Asigna la huella al usuario SOLO después de verificación exitosa
+async function assignFingerprintToUserAfterVerification(userId, huellaId, verificationData) {
+    try {
+        const token = localStorage.getItem("jwtToken");
+        
+        console.log("Asignando huella verificada a usuario...", { userId, huellaId, verificationData });
+        
+        // 1. Asignar ID en backend
+        const assignResponse = await fetch(`${BASE_URL}/users/huella/assign-complete`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify({ 
+                user_id: userId, 
+                huella_id: huellaId,
+                verification_data: verificationData
+            })
+        });
+
+        if (!assignResponse.ok) {
+            throw new Error('Error asignando huella en backend');
+        }
+        
+        const assignData = await assignResponse.json();
+        
+        if (!assignData.success) {
+            throw new Error(assignData.message || 'Error en asignación');
+        }
+
+        // 2. Mostrar éxito
+        await Swal.fire({
+            icon: 'success',
+            title: '¡HUELLA REGISTRADA EXITOSAMENTE!',
+            html: `
+                <div style="text-align: center;">
+                    <div style="font-size: 50px; color: green; margin: 20px 0;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <p><strong>Usuario:</strong> ${assignData.user_nombre || userId}</p>
+                    <p><strong>Huella ID:</strong> ${huellaId}</p>
+                    <p><strong>Estado:</strong> Registrada físicamente y asignada</p>
+                    <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 15px 0;">
+                        <p style="margin: 0; color: #155724;">
+                            <i class="fas fa-info-circle"></i> 
+                            La huella ahora está registrada tanto en el ESP32 como en la base de datos.
+                        </p>
+                    </div>
+                </div>
+            `,
+            confirmButtonText: 'Aceptar',
+            width: 550
+        });
+
+        // 3. Recargar lista de empleados
+        await loadEmployees();
+        
+        return assignData;
+        
+    } catch (error) {
+        console.error('Error asignando huella después de verificación:', error);
+        
+        // Mostrar error pero informar que físicamente SÍ se registró
+        await Swal.fire({
+            icon: 'warning',
+            title: 'Registro físico exitoso pero error en asignación',
+            html: `
+                <div style="text-align: left;">
+                    <p>La huella se registró físicamente en el ESP32, pero hubo un error al guardar en la base de datos.</p>
+                    <p><strong>Huella ID:</strong> ${huellaId}</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <hr>
+                    <p><strong>¿Qué hacer?</strong></p>
+                    <ol>
+                        <li>La huella física está registrada en el ESP32 (ID: ${huellaId})</li>
+                        <li>Puede intentar asignarla manualmente desde "Editar usuario"</li>
+                        <li>Contacte al administrador del sistema si el problema persiste</li>
+                    </ol>
+                </div>
+            `,
+            confirmButtonText: 'Entendido',
+            width: 550
+        });
+        
+        throw error;
     }
 }
 
