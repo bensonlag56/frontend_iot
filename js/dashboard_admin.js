@@ -5259,12 +5259,20 @@ async function deleteSchedule(scheduleId) {
     try {
         const confirmResult = await Swal.fire({
             title: '¿Eliminar horario?',
-            text: 'Esta acción no se puede deshacer.',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p>Esta acción no se puede deshacer.</p>
+                    <p style="color: #dc3545; font-weight: bold;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        Si existen asignaciones activas, no se podrá eliminar.
+                    </p>
+                </div>
+            `,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, eliminar',
+            confirmButtonText: 'Sí, intentar eliminar',
             cancelButtonText: 'Cancelar'
         });
         
@@ -5277,6 +5285,13 @@ async function deleteSchedule(scheduleId) {
         
         if (!res.ok) {
             const errorData = await res.json();
+            
+            // Si hay asignaciones activas, mostrar opciones
+            if (errorData.msg && errorData.msg.includes('asignaciones activas')) {
+                await handleActiveAssignments(scheduleId);
+                return;
+            }
+            
             throw new Error(errorData.msg || errorData.message || `Error ${res.status}`);
         }
         
@@ -5296,6 +5311,211 @@ async function deleteSchedule(scheduleId) {
     }
 }
 
+async function handleActiveAssignments(scheduleId) {
+    // Primero obtenemos información del horario y sus asignaciones
+    try {
+        const scheduleRes = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!scheduleRes.ok) throw new Error('Error obteniendo horario');
+        const schedule = await scheduleRes.json();
+        
+        // Obtener horarios disponibles para reasignar
+        const schedulesRes = await fetch(`${BASE_URL}/schedules/`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!schedulesRes.ok) throw new Error('Error obteniendo horarios');
+        const allSchedules = await schedulesRes.json();
+        
+        // Filtrar el horario actual
+        const otherSchedules = allSchedules.filter(s => s.id != scheduleId);
+        
+        const result = await Swal.fire({
+            title: 'Horario tiene asignaciones activas',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Horario:</strong> ${schedule.nombre}</p>
+                    <p style="color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        No se puede eliminar porque hay usuarios asignados.
+                    </p>
+                    <hr>
+                    <p><strong>Opciones:</strong></p>
+                    <ol>
+                        <li><strong>Terminar asignaciones</strong> - Cambia fecha fin a hoy</li>
+                        <li><strong>Reasignar usuarios</strong> - Mover a otro horario</li>
+                        <li><strong>Eliminar forzadamente</strong> - Elimina horario y asignaciones</li>
+                    </ol>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            showDenyButton: true,
+            showConfirmButton: true,
+            confirmButtonText: 'Reasignar usuarios',
+            denyButtonText: 'Terminar asignaciones',
+            cancelButtonText: 'Eliminar forzadamente',
+            confirmButtonColor: '#3085d6',
+            denyButtonColor: '#28a745',
+            cancelButtonColor: '#dc3545',
+            width: 600
+        });
+        
+        if (result.isConfirmed) {
+            // Opción 1: Reasignar usuarios
+            await reassignScheduleUsers(scheduleId, schedule, otherSchedules);
+        } else if (result.isDenied) {
+            // Opción 2: Terminar asignaciones (cambiar fecha fin a hoy)
+            await endAssignments(scheduleId);
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            // Opción 3: Eliminar forzadamente
+            await forceDeleteSchedule(scheduleId);
+        }
+        
+    } catch (err) {
+        console.error("Error manejando asignaciones activas:", err);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error: ' + err.message
+        });
+    }
+}
+
+async function reassignScheduleUsers(scheduleId, currentSchedule, otherSchedules) {
+    // Crear lista de opciones para el select
+    let optionsHtml = '<option value="">Seleccionar nuevo horario</option>';
+    otherSchedules.forEach(s => {
+        optionsHtml += `<option value="${s.id}">${s.nombre} (${s.hora_entrada} - ${s.hora_salida})</option>`;
+    });
+    
+    const { value: newScheduleId } = await Swal.fire({
+        title: 'Seleccionar nuevo horario',
+        html: `
+            <div style="text-align: left; font-size: 14px;">
+                <p><strong>Horario actual:</strong> ${currentSchedule.nombre}</p>
+                <p><strong>Usuarios afectados:</strong> Serán movidos al nuevo horario</p>
+                <select id="newScheduleSelect" class="swal2-select" style="width: 100%; margin-top: 10px;">
+                    ${optionsHtml}
+                </select>
+            </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Reasignar y eliminar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const select = Swal.getPopup().querySelector('#newScheduleSelect');
+            if (!select.value) {
+                Swal.showValidationMessage('Por favor seleccione un horario');
+                return false;
+            }
+            return select.value;
+        }
+    });
+    
+    if (!newScheduleId) return;
+    
+    try {
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}/reassign`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ new_schedule_id: newScheduleId })
+        });
+        
+        if (!res.ok) throw new Error('Error en reasignación');
+        
+        Toast.fire({
+            icon: 'success',
+            title: 'Usuarios reasignados y horario eliminado'
+        });
+        
+        loadSchedules();
+        
+    } catch (err) {
+        Toast.fire({
+            icon: 'error',
+            title: 'Error en reasignación: ' + err.message
+        });
+    }
+}
+
+async function endAssignments(scheduleId) {
+    try {
+        const confirm = await Swal.fire({
+            title: '¿Terminar asignaciones?',
+            text: 'Se cambiará la fecha fin de todas las asignaciones a hoy.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, terminar',
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (!confirm.isConfirmed) return;
+        
+        // Llamar a endpoint para terminar asignaciones
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}/end-assignments`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) throw new Error('Error terminando asignaciones');
+        
+        // Ahora eliminar el horario
+        await deleteSchedule(scheduleId);
+        
+    } catch (err) {
+        Toast.fire({
+            icon: 'error',
+            title: 'Error: ' + err.message
+        });
+    }
+}
+
+async function forceDeleteSchedule(scheduleId) {
+    try {
+        const confirm = await Swal.fire({
+            title: '¿Eliminar forzadamente?',
+            html: `
+                <div style="text-align: left; color: #dc3545; font-size: 14px;">
+                    <p><i class="fas fa-exclamation-triangle"></i> <strong>ADVERTENCIA:</strong></p>
+                    <p>Se eliminarán TODAS las asignaciones asociadas a este horario.</p>
+                    <p>Los usuarios afectados quedarán sin horario asignado.</p>
+                    <p>Esta acción NO se puede deshacer.</p>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar todo',
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (!confirm.isConfirmed) return;
+        
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}/force`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) throw new Error('Error en eliminación forzada');
+        
+        Toast.fire({
+            icon: 'success',
+            title: 'Horario y asignaciones eliminados'
+        });
+        
+        loadSchedules();
+        
+    } catch (err) {
+        Toast.fire({
+            icon: 'error',
+            title: 'Error: ' + err.message
+        });
+    }
+}
 async function openEditScheduleModal(scheduleId) {
     try {
         const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
