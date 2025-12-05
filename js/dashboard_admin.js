@@ -1928,7 +1928,7 @@ async function updateRFIDFromTable(userId, currentRfid) {
             icon: 'question',
             showCancelButton: true,
             showDenyButton: true,
-            confirmButtonText: 'Registrar Nuevo RFID',
+            confirmButtonText: '',
             denyButtonText: 'Eliminar RFID Actual',
             cancelButtonText: 'Cancelar',
             width: 500
