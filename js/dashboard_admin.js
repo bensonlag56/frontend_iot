@@ -2290,7 +2290,7 @@ async function updateUser() {
             userData.huella_id = null;
         }
         
-        // Manejar RFID - CORREGIDO
+        // Manejar RFID - Solo guardamos el valor del formulario
         const rfid = document.getElementById('editRfid').value;
         const oldRfid = document.getElementById('editRfid').getAttribute('data-old-value');
         
@@ -2396,45 +2396,45 @@ async function updateUser() {
             // 2. Para RFID - SOLO si el usuario YA tenía un RFID (oldRfidValue existe)
             // y cambió a un NUEVO RFID
             if (newRfidValue && newRfidValue !== oldRfidValue) {
-                // Mostrar opción para registrar RFID físicamente
+                // Mostrar opción para registrar RFID físicamente usando el ESP32
                 const confirm = await Swal.fire({
-                    title: 'Nuevo RFID asignado',
-                    text: `¿Desea registrar físicamente el RFID en el ESP32?`,
+                    title: 'Actualizar RFID Físicamente',
+                    text: `¿Desea leer el nuevo RFID físicamente desde el ESP32?`,
                     html: `
                         <div style="text-align: left; font-size: 14px;">
                             <p><strong>Usuario ID:</strong> ${userId}</p>
                             <p><strong>RFID Anterior:</strong> ${oldRfidValue || 'Ninguno'}</p>
-                            <p><strong>RFID Nuevo:</strong> ${newRfidValue}</p>
-                            <p style="color: blue; margin-top: 10px;">
-                                <i class="fas fa-info-circle"></i> El código RFID ya está asignado en la base de datos. 
-                                Ahora necesita registrarlo físicamente en el ESP32.
-                            </p>
-                            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                                <p><strong>Instrucciones:</strong></p>
-                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 12px;">
-                                    <li>Ir al ESP32</li>
-                                    <li>Aparecerá "ESPERANDO RFID"</li>
-                                    <li>Acercar llavero/identificación</li>
-                                    <li>Esperar sonido de confirmación</li>
-                                </ol>
+                            <p><strong>RFID Nuevo (en BD):</strong> ${newRfidValue}</p>
+                            <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                                <p style="margin: 0; color: #856404;">
+                                    <i class="fas fa-exclamation-triangle"></i> 
+                                    <strong>IMPORTANTE:</strong> Necesita leer físicamente el nuevo RFID en el ESP32
+                                </p>
                             </div>
+                            <p style="color: green; margin-top: 10px;">
+                                ✅ Preparado para lectura RFID física
+                            </p>
                         </div>
                     `,
                     icon: 'question',
                     showCancelButton: true,
-                    confirmButtonText: 'Sí, registrar físicamente',
-                    cancelButtonText: 'No, solo actualizar código',
+                    confirmButtonText: 'Sí, leer RFID físico',
+                    cancelButtonText: 'No, solo actualizar en BD',
                     showDenyButton: true,
                     denyButtonText: 'Cancelar',
                     width: 550
                 });
                 
                 if (confirm.isConfirmed) {
-                    // Usar la función para usuarios existentes
-                    await registerExistingUserRFID(userId, newRfidValue);
+                    // Iniciar proceso de lectura física del RFID
+                    await startPhysicalRFIDUpdate(userId, oldRfidValue, newRfidValue);
                 } else if (confirm.isDenied) {
                     // Opción de cancelar (no hacer nada)
-                    console.log('Usuario canceló registro físico de RFID');
+                    console.log('Usuario canceló lectura física de RFID');
+                    Toast.fire({
+                        icon: 'info',
+                        title: 'RFID actualizado solo en base de datos'
+                    });
                 }
             }
             
@@ -2448,6 +2448,284 @@ async function updateUser() {
             icon: 'error',
             title: 'Error al actualizar usuario',
             text: error.message || 'Error desconocido'
+        });
+    }
+}
+
+// ========== FUNCIÓN PARA ACTUALIZAR RFID FÍSICAMENTE ==========
+async function startPhysicalRFIDUpdate(userId, oldRfid, newRfid) {
+    try {
+        console.log(`Actualizando RFID físicamente para usuario ${userId}: ${oldRfid} -> ${newRfid}`);
+        
+        // 1. Verificar conexión ESP32
+        await updateESP32Status();
+        
+        const statusElement = document.getElementById('esp32-status');
+        if (!statusElement || !statusElement.className.includes('status-online')) {
+            throw new Error('ESP32 no conectado. Verifique la conexión en "Control ESP32".');
+        }
+        
+        // 2. Confirmar con el usuario
+        const confirmResult = await Swal.fire({
+            icon: 'info',
+            title: 'LECTURA DE RFID FÍSICO',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Usuario ID:</strong> ${userId}</p>
+                    <p><strong>RFID Esperado:</strong> <code>${newRfid}</code></p>
+                    <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                        <p style="margin: 0; color: #856404;">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <strong>IMPORTANTE:</strong> El ESP32 debe mostrar "ESPERANDO RFID"
+                        </p>
+                    </div>
+                    <p style="color: green; margin-top: 10px;">
+                        ✅ Preparado para lectura física
+                    </p>
+                    <hr>
+                    <p><strong>Instrucciones:</strong></p>
+                    <ol>
+                        <li>Diríjase al dispositivo ESP32</li>
+                        <li>Verifique que aparezca "ESPERANDO RFID"</li>
+                        <li>Acercar llavero/tarjeta RFID al lector</li>
+                        <li>Espere el sonido de confirmación (BEEP)</li>
+                        <li>Regrese aquí para verificar</li>
+                    </ol>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Iniciar Lectura',
+            cancelButtonText: 'Cancelar',
+            width: 500
+        });
+
+        if (!confirmResult.isConfirmed) {
+            return;
+        }
+
+        // 3. Enviar comando al ESP32 para leer RFID
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            throw new Error('IP del ESP32 no configurada');
+        }
+        
+        console.log(`Enviando comando UPDATE_RFID a ESP32 ${esp32IP} para usuario ${userId}`);
+        
+        const commandResponse = await fetch(`http://${esp32IP}/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                command: 'UPDATE_RFID',
+                user_id: userId,
+                old_rfid: oldRfid,
+                new_rfid: newRfid,
+                timestamp: Date.now(),
+                source: 'admin_dashboard_update'
+            })
+        });
+        
+        if (!commandResponse.ok) {
+            throw new Error(`Error HTTP ${commandResponse.status} enviando comando al ESP32`);
+        }
+        
+        const commandData = await commandResponse.json();
+        console.log('Respuesta ESP32:', commandData);
+        
+        if (!commandData.status || commandData.status !== 'success') {
+            throw new Error(commandData.message || 'Error en ESP32');
+        }
+
+        // 4. Monitorear lectura
+        let checkCount = 0;
+        const maxChecks = 90;
+        
+        await Swal.fire({
+            title: 'ESPERANDO RFID',
+            html: `
+                <div style="text-align: center;">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p style="margin-top: 15px; font-size: 16px;">
+                        <strong>Acercar nuevo llavero/tarjeta RFID</strong>
+                    </p>
+                    <p><small>Usuario ID: ${userId}</small></p>
+                    <p><small>RFID Esperado: ${newRfid}</small></p>
+                    
+                    <div style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                        <p style="margin: 0; font-size: 12px; color: #666;">
+                            <i class="fas fa-clock"></i> Tiempo: 
+                            <span id="rfid-update-timer">0</span>/${maxChecks} segundos
+                        </p>
+                    </div>
+                    
+                    <div style="margin-top: 15px; font-size: 12px; color: #666; text-align: left;">
+                        <p><i class="fas fa-check-circle" style="color: green;"></i> <strong>Verifique en el ESP32:</strong></p>
+                        <ul style="margin: 5px 0; padding-left: 20px;">
+                            <li>Debe decir: "ESPERANDO RFID"</li>
+                            <li>Acercar suficientemente el llavero</li>
+                            <li>Espere sonido de confirmación (BEEP)</li>
+                        </ul>
+                    </div>
+                </div>
+            `,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            width: 500,
+            willOpen: () => {
+                const progressInterval = setInterval(async () => {
+                    checkCount++;
+                    const timerEl = document.getElementById('rfid-update-timer');
+                    if (timerEl) {
+                        timerEl.textContent = checkCount;
+                    }
+                    
+                    // Verificar cada 3 segundos
+                    if (checkCount % 3 === 0) {
+                        try {
+                            const token = localStorage.getItem("jwtToken");
+                            const userResponse = await fetch(`${BASE_URL}/users/${userId}`, {
+                                headers: { "Authorization": "Bearer " + token }
+                            });
+                            
+                            if (userResponse.ok) {
+                                const currentUserData = await userResponse.json();
+                                
+                                // Verificar si el RFID coincide con el que esperamos
+                                if (currentUserData.rfid && currentUserData.rfid === newRfid) {
+                                    clearInterval(progressInterval);
+                                    Swal.close();
+                                    
+                                    // Recargar lista de empleados
+                                    await loadEmployees();
+                                    
+                                    // Mostrar éxito
+                                    Swal.fire({
+                                        icon: 'success',
+                                        title: '¡RFID ACTUALIZADO EXITOSAMENTE!',
+                                        html: `
+                                            <div style="text-align: center;">
+                                                <div style="font-size: 50px; color: green; margin: 20px 0;">
+                                                    <i class="fas fa-check-circle"></i>
+                                                </div>
+                                                <p><strong>Usuario ID:</strong> ${userId}</p>
+                                                <p><strong>RFID Anterior:</strong> ${oldRfid || 'Ninguno'}</p>
+                                                <p><strong>RFID Nuevo:</strong> <code>${currentUserData.rfid}</code></p>
+                                                <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin: 15px 0;">
+                                                    <p style="margin: 0; color: #155724;">
+                                                        <i class="fas fa-info-circle"></i> 
+                                                        El RFID ahora está actualizado tanto en la base de datos 
+                                                        como físicamente en el ESP32.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        `,
+                                        confirmButtonText: 'Aceptar',
+                                        width: 550
+                                    });
+                                    return;
+                                }
+                            }
+                        } catch (error) {
+                            console.error("Error verificando RFID:", error);
+                        }
+                    }
+                    
+                    // Timeout
+                    if (checkCount >= maxChecks) {
+                        clearInterval(progressInterval);
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Tiempo agotado',
+                            html: `
+                                <div style="text-align: left;">
+                                    <p>No se detectó el RFID esperado en 90 segundos.</p>
+                                    <p><strong>Estado actual:</strong></p>
+                                    <ul>
+                                        <li>RFID Esperado: ${newRfid}</li>
+                                        <li>Usuario ID: ${userId}</li>
+                                        <li>Tiempo: ${maxChecks} segundos</li>
+                                    </ul>
+                                    <p><strong>¿Qué revisar?</strong></p>
+                                    <ol>
+                                        <li>¿El ESP32 muestra "ESPERANDO RFID"?</li>
+                                        <li>¿El llavero/tarjeta está funcionando?</li>
+                                        <li>¿Acercó suficientemente al lector?</li>
+                                        <li>¿Escuchó el sonido de confirmación?</li>
+                                    </ol>
+                                    <div style="margin-top: 20px;">
+                                        <button onclick="startPhysicalRFIDUpdate(${userId}, '${oldRfid}', '${newRfid}')" 
+                                                class="btn btn-primary" 
+                                                style="padding: 8px 16px; margin-right: 10px;">
+                                            <i class="fas fa-redo"></i> Reintentar
+                                        </button>
+                                        <button onclick="showSection('section-esp32-control')" 
+                                                class="btn btn-secondary"
+                                                style="padding: 8px 16px; margin-right: 10px;">
+                                            <i class="fas fa-microchip"></i> Verificar ESP32
+                                        </button>
+                                        <button onclick="loadEmployees()" 
+                                                class="btn btn-info"
+                                                style="padding: 8px 16px;">
+                                            <i class="fas fa-sync"></i> Actualizar Lista
+                                        </button>
+                                    </div>
+                                </div>
+                            `,
+                            confirmButtonText: 'Cerrar',
+                            width: 600
+                        });
+                    }
+                }, 1000);
+                
+                Swal.getPopup().setAttribute('data-interval-id', progressInterval);
+            },
+            willClose: () => {
+                const intervalId = Swal.getPopup().getAttribute('data-interval-id');
+                if (intervalId) clearInterval(intervalId);
+            }
+        });
+
+    } catch (err) {
+        console.error('Error actualizando RFID físicamente:', err);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'ERROR EN ACTUALIZACIÓN DE RFID',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <hr>
+                    <p><strong>Solución paso a paso:</strong></p>
+                    <ol>
+                        <li>Vaya a <strong>"Control ESP32"</strong></li>
+                        <li>Verifique estado: debe decir <strong>"ESP32 CONECTADO"</strong></li>
+                        <li>Si dice desconectado, haga clic en <strong>"Probar Conexión"</strong></li>
+                        <li>Configure IP correcta con <strong>"Configurar IP"</strong></li>
+                        <li>La IP debe ser la que aparece en pantalla del ESP32</li>
+                    </ol>
+                    <div style="margin-top: 20px;">
+                        <button onclick="showSection('section-esp32-control')" 
+                                class="btn btn-primary" 
+                                style="padding: 8px 16px; margin-right: 10px;">
+                            <i class="fas fa-microchip"></i> Ir a Control ESP32
+                        </button>
+                        <button onclick="startPhysicalRFIDUpdate(${userId}, '${oldRfid}', '${newRfid}')" 
+                                class="btn btn-warning" 
+                                style="padding: 8px 16px; margin-right: 10px;">
+                            <i class="fas fa-redo"></i> Reintentar
+                        </button>
+                        <button onclick="loadEmployees()" 
+                                class="btn btn-info"
+                                style="padding: 8px 16px;">
+                            <i class="fas fa-sync"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+            `,
+            width: 650
         });
     }
 }
