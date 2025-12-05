@@ -2017,7 +2017,7 @@ async function startPhysicalRFIDUpdateFromTable(userId, oldRfid) {
                         </p>
                     </div>
                     <p style="color: green; margin-top: 10px;">
-                        ✅ Preparado para lectura física de nuevo RFID
+                         Preparado para lectura física de nuevo RFID
                     </p>
                     <hr>
                     <p><strong>Instrucciones:</strong></p>
@@ -2048,20 +2048,35 @@ async function startPhysicalRFIDUpdateFromTable(userId, oldRfid) {
         
         console.log(`Enviando comando UPDATE_RFID_TABLE a ESP32 ${esp32IP} para usuario ${userId}`);
         
-        const commandResponse = await fetch(`http://${esp32IP}/command`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                command: 'UPDATE_RFID',
-                user_id: userId,
-                old_rfid: oldRfid,
-                timestamp: Date.now(),
-                source: 'admin_dashboard_table'
-            })
-        });
-        
+        let url;
+    if (esp32IP.includes('https://')) {
+        // Ya es URL completa
+        url = `${esp32IP}/command`;
+    } else if (esp32IP.includes('.ngrok-free.app') || esp32IP.includes('.ngrok.io')) {
+        // Es dominio ngrok sin protocolo
+        url = `https://${esp32IP}/command`;
+    } else {
+        // Es IP local - usar proxy del backend para evitar Mixed Content
+        url = `${BASE_URL}/esp32/proxy/command`;
+    }
+    
+    console.log(`URL construida: ${url}`);
+    
+    const commandResponse = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
+        },
+        body: JSON.stringify({
+            command: 'UPDATE_RFID',
+            user_id: userId,
+            old_rfid: oldRfid,
+            timestamp: Date.now(),
+            source: 'admin_dashboard_table',
+            esp32_ip: esp32IP // Añadir para proxy
+        })
+    });
         if (!commandResponse.ok) {
             throw new Error(`Error HTTP ${commandResponse.status} enviando comando al ESP32`);
         }
