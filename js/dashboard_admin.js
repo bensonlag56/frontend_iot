@@ -1642,60 +1642,76 @@ async function testESP32Connection() {
 }
 
 // ========== FUNCIÓN MODIFICADA PARA ADMIN ==========
-async function sendCommandToESP32(command, huellaId = null, userId = null) {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) {
-        throw new Error('IP del ESP32 no configurada');
-    }
-
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const url = `http://${esp32IP}/command`;
+async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
+    try {
+        const esp32IP = localStorage.getItem('esp32_ip') || 'f4f12bcf3348.ngrok-free.app';
         
-        console.log("Enviando comando a:", url);
+        console.log(`[DIRECT] Enviando ${command} a ESP32...`);
         
-        xhr.timeout = 10000; // Reducir timeout a 10 segundos
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
+        // Determinar URL (HTTPS para ngrok, HTTP para IP local)
+        let url;
+        if (esp32IP.includes('https://')) {
+            url = `${esp32IP}/command`;
+        } else if (esp32IP.includes('.ngrok-free.app') || esp32IP.includes('.ngrok.io')) {
+            url = `https://${esp32IP}/command`;
+        } else {
+            url = `http://${esp32IP}/command`;
+        }
         
-        const payload = {
-            command: command,
-            timestamp: Date.now(),
-            source: 'admin_dashboard'
-        };
+        console.log(`URL de destino: ${url}`);
         
-        if (huellaId) payload.huella_id = huellaId;
-        if (userId) payload.user_id = userId;
-        
-        xhr.onload = function() {
-            console.log("Respuesta recibida:", xhr.status, xhr.responseText);
-            if (xhr.status === 200) {
-                try {
-                    const data = JSON.parse(xhr.responseText);
-                    resolve(data);
-                } catch (e) {
-                    console.log("Respuesta no JSON, asumiendo éxito:", xhr.responseText);
-                    resolve({ status: 'success', message: 'Comando enviado' });
-                }
-            } else {
-                console.error("Error HTTP:", xhr.status, xhr.statusText);
-                reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
+        // Intentar conexión directa
+        try {
+            console.log("Intentando conexión directa...");
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    command: command,
+                    huella_id: huellaId,
+                    user_id: userId,
+                    timestamp: Date.now(),
+                    is_admin: isAdmin
+                }),
+                signal: AbortSignal.timeout(8000)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
             }
-        };
+            
+            const responseText = await response.text();
+            console.log("Respuesta del ESP32:", responseText);
+            
+            try {
+                const data = JSON.parse(responseText);
+                console.log("✓ Respuesta JSON parseada:", data);
+                return data;
+            } catch (e) {
+                // Si no es JSON válido, puede ser HTML
+                if (responseText.includes('<html>') || responseText.includes('<!DOCTYPE')) {
+                    console.error("ESP32 respondió con HTML, no JSON");
+                    throw new Error('ESP32 respondió con página HTML. Verifica que el endpoint /command esté funcionando.');
+                }
+                // Si es texto plano pero exitoso
+                console.log("Respuesta texto plano, asumiendo éxito:", responseText);
+                return { status: 'success', message: 'Comando enviado' };
+            }
+            
+        } catch (directError) {
+            console.log("✗ Conexión directa falló:", directError.message);
+            
+            // Si falla la conexión directa, usar proxy
+            console.log("Intentando via proxy del backend...");
+            return await sendCommandViaProxy(command, huellaId, userId);
+        }
         
-        xhr.onerror = function() {
-            console.error("Error de red al conectar con:", url);
-            reject(new Error('Error de conexión con el ESP32. Verifique la red.'));
-        };
-        
-        xhr.ontimeout = function() {
-            console.error("Timeout al conectar con:", url);
-            reject(new Error('Timeout - El ESP32 no respondió. Verifique que esté encendido.'));
-        };
-        
-        console.log("Enviando payload:", payload);
-        xhr.send(JSON.stringify(payload));
-    });
+    } catch (error) {
+        console.error('Error enviando comando:', error);
+        throw new Error(`No se pudo enviar comando: ${error.message}`);
+    }
 }
 async function sendCommandViaProxy(command, huellaId = null, userId = null) {
     const esp32IP = localStorage.getItem('esp32_ip');
@@ -1731,56 +1747,6 @@ async function sendCommandViaProxy(command, huellaId = null, userId = null) {
         throw error;
     }
 }
-
-async function sendCommandToESP32(command, huellaId = null, userId = null) {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) {
-        throw new Error('IP del ESP32 no configurada');
-    }
-
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        const url = `http://${esp32IP}/command`;
-        console.log("Enviando comando a:", url);
-        
-        xhr.timeout = 15000;
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        
-        const payload = {
-            command: command,
-            timestamp: Date.now()
-        };
-        
-        if (huellaId) payload.huella_id = huellaId;
-        if (userId) payload.user_id = userId;
-        
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    const data = JSON.parse(xhr.responseText);
-                    resolve(data);
-                } catch (e) {
-                    resolve({ status: 'success', message: 'Comando enviado' });
-                }
-            } else {
-                reject(new Error(`Error HTTP ${xhr.status}: ${xhr.statusText}`));
-            }
-        };
-        
-        xhr.onerror = function() {
-            reject(new Error('Error de conexión con el ESP32'));
-        };
-        
-        xhr.ontimeout = function() {
-            reject(new Error('Timeout - El ESP32 no respondió'));
-        };
-        
-        xhr.send(JSON.stringify(payload));
-    });
-}
-
 
 function initializeEmployeeRegistration() {
     const btnSaveEmployee = document.getElementById("btn-save-employee");
