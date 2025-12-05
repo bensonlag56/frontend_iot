@@ -4808,85 +4808,35 @@ async function registerRFID(userId) {
 // ========== FUNCIONES FALTANTES ==========
 
 async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) {
-        throw new Error('IP del ESP32 no configurada');
-    }
-
-    console.log(`Enviando ${command} a ESP32 ${esp32IP}...`);
-    
-    // PRIMER intento: fetch directo con timeout
     try {
-        console.log("1. Intentando fetch directo...");
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        console.log(`Enviando ${command} via proxy del backend...`);
         
-        const response = await fetch(`http://${esp32IP}/command`, {
+        // USAR SIEMPRE EL BACKEND COMO PROXY
+        const response = await fetch(`${BASE_URL}/esp32/proxy/command`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
             },
             body: JSON.stringify({
                 command: command,
                 huella_id: huellaId,
                 user_id: userId,
-                timestamp: Date.now(),
                 is_admin: isAdmin
-            }),
-            signal: controller.signal
+                // NOTA: NO enviar esp32_ip aquí, el backend ya lo sabe
+            })
         });
         
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log("✓ Fetch directo exitoso:", data);
-            return data;
+        if (!response.ok) {
+            throw new Error(`Error HTTP ${response.status}: ${await response.text()}`);
         }
-    } catch (fetchError) {
-        console.log("✗ Fetch directo falló:", fetchError.message);
-    }
-    
-    // SEGUNDO intento: XMLHttpRequest (maneja mejor errores de red)
-    try {
-        console.log("2. Intentando XMLHttpRequest...");
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.timeout = 8000;
-            xhr.open('POST', `http://${esp32IP}/command`, true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        resolve(JSON.parse(xhr.responseText));
-                    } catch {
-                        resolve({ status: 'success', message: 'Comando enviado' });
-                    }
-                } else {
-                    reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
-                }
-            };
-            
-            xhr.onerror = function() {
-                reject(new Error('Error de red - No se pudo conectar al ESP32'));
-            };
-            
-            xhr.ontimeout = function() {
-                reject(new Error('Timeout - ESP32 no respondió'));
-            };
-            
-            xhr.send(JSON.stringify({
-                command: command,
-                huella_id: huellaId,
-                user_id: userId,
-                timestamp: Date.now(),
-                is_admin: isAdmin
-            }));
-        });
-    } catch (xhrError) {
-        console.log("✗ XMLHttpRequest también falló:", xhrError.message);
-        throw new Error(`Error de conexión: ${xhrError.message}`);
+        
+        const data = await response.json();
+        return data;
+        
+    } catch (error) {
+        console.error('Error enviando comando via proxy:', error);
+        throw new Error(`No se pudo enviar comando: ${error.message}`);
     }
 }
 
