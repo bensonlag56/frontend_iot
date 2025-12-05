@@ -1548,14 +1548,9 @@ async function updateESP32Status() {
     statusElement.className = 'status-box';
 
     try {
-        const esp32IP = localStorage.getItem('esp32_ip');
-        if (!esp32IP) {
-            statusElement.innerHTML = 'IP no configurada<br>Configure la IP del ESP32';
-            statusElement.className = 'status-box status-offline';
-            return;
-        }
-
-        // USAR EL PROXY EN VEZ DE CONEXIÓN DIRECTA
+        const esp32IP = localStorage.getItem('esp32_ip') || 'f4f12bcf3348.ngrok-free.app';
+        
+        // Usar el proxy del backend
         const response = await fetch(`${BASE_URL}/esp32/proxy/status`, {
             method: 'POST',
             headers: {
@@ -1573,34 +1568,37 @@ async function updateESP32Status() {
             if (data.success && data.status === 'online') {
                 statusElement.innerHTML =
                     ` ESP32 CONECTADO<br>` +
-                    ` IP: ${esp32IP}<br>` +
-                    ` Estado: ${data.esp32_data?.status || 'Conectado'}<br>` +
-                    ` Sistema: ${data.esp32_data?.sistema_listo ? '✅ Listo' : '❌ No listo'}`;
+                    ` URL: ${esp32IP}<br>` +
+                    ` Via: Backend Proxy`;
                 statusElement.className = 'status-box status-online';
 
-                if (infoElement && data.esp32_data) {
+                if (infoElement) {
                     infoElement.innerHTML = `
-                        <p><strong>Conexión:</strong> Via Proxy (Backend)</p>
-                        <p><strong>IP:</strong> ${data.esp32_data.ip || esp32IP}</p>
-                        <p><strong>Registro activo:</strong> ${data.esp32_data.registro_activo ? '✅ Sí' : '❌ No'}</p>
-                        <p><strong>RFID activo:</strong> ${data.esp32_data.lectura_rfid_activa ? '✅ Sí' : '❌ No'}</p>
+                        <p><strong>Conexión:</strong> Via ngrok + Backend Proxy</p>
+                        <p><strong>URL:</strong> ${esp32IP}</p>
+                        <p><strong>Estado:</strong> ✅ Conectado</p>
+                        <p><strong>Mensaje:</strong> ${data.message || 'OK'}</p>
                     `;
                 }
             } else {
-                throw new Error(data.message || 'ESP32 offline');
+                statusElement.innerHTML =
+                    ` ESP32 DESCONECTADO<br>` +
+                    ` URL: ${esp32IP}<br>` +
+                    ` Mensaje: ${data.message || 'Error de conexión'}`;
+                statusElement.className = 'status-box status-offline';
             }
         } else {
             throw new Error(`Error del proxy: ${response.status}`);
         }
         
     } catch (error) {
-        const esp32IP = localStorage.getItem('esp32_ip');
+        const esp32IP = localStorage.getItem('esp32_ip') || 'f4f12bcf3348.ngrok-free.app';
         
         console.error("Error conectando al ESP32:", error);
         
         statusElement.innerHTML =
             ` ESP32 DESCONECTADO<br>` +
-            ` IP: ${esp32IP || 'No configurada'}<br>` +
+            ` URL: ${esp32IP}<br>` +
             ` Error: ${error.message}`;
         statusElement.className = 'status-box status-offline';
     }
@@ -4662,7 +4660,7 @@ async function registerRFID(userId) {
             html: `
                 <div style="text-align: left; font-size: 14px;">
                     <p><strong>Usuario:</strong> ID ${userId}</p>
-                    <p style="color: green;">✅ Preparado para lectura RFID</p>
+                    <p style="color: green;">Preparado para lectura RFID</p>
                     <hr>
                     <p><strong>Instrucciones:</strong></p>
                     <ol>
@@ -4739,7 +4737,7 @@ async function registerRFID(userId) {
                                             <p><strong>RFID:</strong> ${currentUser.rfid}</p>
                                             <p><strong>Estado:</strong> Asignado correctamente</p>
                                             <p style="color: green; margin-top: 10px;">
-                                                ✅ El usuario ahora puede acceder con su RFID
+                                                 El usuario ahora puede acceder con su RFID
                                             </p>
                                         </div>
                                     `,
@@ -4808,19 +4806,18 @@ async function registerRFID(userId) {
         });
     }
 }
-// ========== FUNCIONES FALTANTES ==========
+
 
 async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
     try {
         console.log(`Enviando ${command} via proxy del backend...`);
         
-        // OBTENER LA IP DEL ESP32 DESDE LOCALSTORAGE
         const esp32IP = localStorage.getItem('esp32_ip');
         if (!esp32IP) {
             throw new Error('IP del ESP32 no configurada en el navegador');
         }
         
-        // USAR EL BACKEND COMO PROXY
+      
         const response = await fetch(`${BASE_URL}/esp32/proxy/command`, {
             method: 'POST',
             headers: {
@@ -4828,7 +4825,7 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
                 'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
             },
             body: JSON.stringify({
-                esp32_ip: esp32IP,  // <-- ¡ESTO ES LO QUE FALTA!
+                esp32_ip: esp32IP,  
                 command: command,
                 huella_id: huellaId,
                 user_id: userId,
@@ -4848,7 +4845,7 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
         throw new Error(`No se pudo enviar comando: ${error.message}`);
     }
 }
-// Funciones para asistencia que faltan
+
 async function loadUsersForAttendance() {
     try {
         const res = await fetch(`${BASE_URL}/users`, {
@@ -4861,12 +4858,10 @@ async function loadUsersForAttendance() {
         const select = document.getElementById('attendanceUserSelect');
         if (!select) return;
         
-        // Limpiar opciones excepto la primera
         while (select.options.length > 1) {
             select.remove(1);
         }
         
-        // Agregar usuarios
         data.users.forEach(user => {
             const option = document.createElement('option');
             option.value = user.id;
@@ -4880,12 +4875,9 @@ async function loadUsersForAttendance() {
 }
 
 async function loadAttendanceSummary() {
-    // Esta función se llamará cuando se cargue la sección de asistencias
     console.log("Cargando resumen de asistencias...");
-    // Implementa según tu lógica
+ 
 }
-
-// Función para el botón de cargar asistencias
 document.getElementById('btnLoadAttendance')?.addEventListener('click', loadAttendanceData);
 
 async function loadAttendanceData() {
@@ -4964,22 +4956,16 @@ function initializeSchedules() {
     if (btnSaveSchedule) {
         btnSaveSchedule.addEventListener("click", saveSchedule);
     }
-    
-    // Agregar evento al botón de crear horario
     const btnOpenCreateSchedule = document.getElementById("btnOpenCreateSchedule");
     if (btnOpenCreateSchedule) {
         btnOpenCreateSchedule.addEventListener("click", () => {
             openModal('createScheduleModal');
         });
     }
-    
-    // Agregar evento al botón de guardar horario en el modal
     const btnSaveScheduleModal = document.getElementById("btnSaveSchedule");
     if (btnSaveScheduleModal) {
         btnSaveScheduleModal.addEventListener("click", saveSchedule);
     }
-    
-    // Agregar evento al botón de guardar edición de horario
     const btnSaveEditedSchedule = document.getElementById("btnSaveEditedSchedule");
     if (btnSaveEditedSchedule) {
         btnSaveEditedSchedule.addEventListener("click", saveEditedSchedule);
@@ -5189,8 +5175,6 @@ async function assignSchedule() {
         });
     }
 }
-
-// Agregar evento al botón de asignar horario
 document.addEventListener('DOMContentLoaded', function() {
     const btnAssignSchedule = document.getElementById('btnAssignSchedule');
     if (btnAssignSchedule) {
@@ -5245,14 +5229,10 @@ async function openEditScheduleModal(scheduleId) {
         const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
             headers: getAuthHeaders()
         });
-        
         if (!res.ok) {
             throw new Error('Error cargando horario');
         }
-        
         const schedule = await res.json();
-        
-        // Llenar formulario
         document.getElementById('editScheduleId').value = schedule.id;
         document.getElementById('editScheduleName').value = schedule.nombre || '';
         document.getElementById('editScheduleEntrada').value = schedule.hora_entrada || '';
@@ -5260,8 +5240,6 @@ async function openEditScheduleModal(scheduleId) {
         document.getElementById('editScheduleTipo').value = schedule.tipo || 'fijo';
         document.getElementById('editScheduleTolEnt').value = schedule.tolerancia_entrada || 0;
         document.getElementById('editScheduleTolSal').value = schedule.tolerancia_salida || 0;
-        
-        // Marcar días
         document.querySelectorAll('.edit-sch-day').forEach(cb => {
             cb.checked = false;
         });
@@ -5275,8 +5253,6 @@ async function openEditScheduleModal(scheduleId) {
                 }
             });
         }
-        
-        // Abrir modal
         openModal('editScheduleModal');
         
     } catch (err) {
@@ -5289,7 +5265,6 @@ async function openEditScheduleModal(scheduleId) {
 }
 async function saveSchedule() {
     try {
-        // Obtener datos del modal
         const nombre = document.getElementById("schName").value.trim();
         const hora_entrada = document.getElementById("schEntrada").value;
         const hora_salida = document.getElementById("schSalida").value;
@@ -5297,8 +5272,6 @@ async function saveSchedule() {
         const diasElements = document.querySelectorAll('.sch-day:checked');
         const tolerancia_entrada = parseInt(document.getElementById("schTolEnt").value) || 0;
         const tolerancia_salida = parseInt(document.getElementById("schTolSal").value) || 0;
-        
-        // Validaciones
         if (!nombre) {
             Toast.fire({ icon: 'warning', title: 'El nombre es obligatorio' });
             return;
@@ -5313,8 +5286,6 @@ async function saveSchedule() {
             Toast.fire({ icon: 'warning', title: 'Seleccione al menos un día' });
             return;
         }
-        
-        // Preparar días como string separado por comas
         const dias = Array.from(diasElements).map(d => d.value).join(',');
         
         const payload = {
@@ -5345,8 +5316,7 @@ async function saveSchedule() {
             icon: 'success', 
             title: 'Horario creado correctamente' 
         });
-        
-        // Cerrar modal y limpiar
+
         closeModal('createScheduleModal');
         document.getElementById("schName").value = "";
         document.getElementById("schEntrada").value = "";
@@ -5355,8 +5325,7 @@ async function saveSchedule() {
         document.getElementById("schTolEnt").value = "0";
         document.getElementById("schTolSal").value = "0";
         document.querySelectorAll('.sch-day').forEach(cb => cb.checked = false);
-        
-        // Recargar lista
+
         loadSchedules();
         
     } catch (err) {
@@ -5374,9 +5343,7 @@ function getAuthHeaders() {
         "Content-Type": "application/json"
     };
 }
-// ========== INICIALIZACIÓN ==========
 document.addEventListener("DOMContentLoaded", function () {
-    // Configurar IP por defecto si no existe
     if (!localStorage.getItem('esp32_ip')) {
         localStorage.setItem('esp32_ip', 'https://f4f12bcf3348.ngrok-free.app');
         ESP32_BASE_URL = 'https://f4f12bcf3348.ngrok-free.app';
@@ -5384,7 +5351,7 @@ document.addEventListener("DOMContentLoaded", function () {
         ESP32_BASE_URL = `http://${localStorage.getItem('esp32_ip')}`;
     }
     
-    // Mostrar IP actual
+    
     const currentIpElement = document.getElementById('current-ip');
     if (currentIpElement) {
         currentIpElement.textContent = localStorage.getItem('esp32_ip');
@@ -5396,8 +5363,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeAttendance();
     loadUsersForAttendance();
     loadAttendanceSummary();
-    
-    // Actualizar estado del ESP32 cada 30 segundos
+
     updateESP32Status();
     setInterval(updateESP32Status, 30000);
     
