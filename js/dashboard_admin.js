@@ -1897,7 +1897,7 @@ async function loadEmployees() {
                         <button class="btn small btn-rfid" 
                                 onclick="${u.rfid ? `updateRFIDFromTable(${u.id}, '${u.rfid}')` : `registerRFID(${u.id})`}"
                                 ${u.is_active === false ? 'disabled' : ''}>
-                            ${u.rfid ? '🔄 Actualizar RFID' : '➕ Agregar RFID'}
+                            ${u.rfid ? 'Eliminar RFID' : '➕ Agregar RFID'}
                         </button>
                     </div>
                 </td>
