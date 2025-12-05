@@ -1399,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Función para cargar usuarios en el select
 async function loadAccessUsers() {
     try {
-        const response = await fetch(`${BASE_URL}/users/?page=1&per_page=100`, {
+        const response = await fetch(`${BASE_URL}/users`, {
             headers: getAuthHeaders()
         });
         
@@ -3109,7 +3109,7 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
 // Funciones para asistencia que faltan
 async function loadUsersForAttendance() {
     try {
-        const res = await fetch(`${BASE_URL}/users/?page=1&per_page=100`, {
+        const res = await fetch(`${BASE_URL}/users`, {
             headers: getAuthHeaders()
         });
         
