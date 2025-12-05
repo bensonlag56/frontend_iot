@@ -402,27 +402,133 @@
       <!-- ============= -->
       <!-- LISTA DE EMPLEADOS -->
       <!-- ============= -->
-      <section id="section-list-employees" class="pane" style="display:none;">
-        <h2>Empleados registrados</h2>
+      <!-- ============= -->
+<!-- LISTA DE EMPLEADOS -->
+<!-- ============= -->
+<section id="section-list-employees" class="pane" style="display:none;">
+    <h2>Empleados registrados</h2>
 
-        <table class="table">
-          <thead>
+    <!-- Botones de acción masiva -->
+    <div class="bulk-actions">
+        <button onclick="bulkSuspendUsers()" class="bulk-btn bulk-suspend">
+            <i class="fas fa-pause"></i> Suspender seleccionados
+        </button>
+        <button onclick="bulkActivateUsers()" class="bulk-btn bulk-activate">
+            <i class="fas fa-play"></i> Activar suspendidos
+        </button>
+    </div>
+
+    <table class="table">
+        <thead>
             <tr>
-              <th>ID</th>
-              <th>Username</th>
-              <th>Nombre</th>
-              <th>Apellido</th>
-              <th>Rol</th>
-              <th>Área</th>
-              <th>Huella ID</th>
-              <th>RFID</th>
-              <th>Acción</th>
+                <th><input type="checkbox" id="selectAllUsers" onchange="toggleSelectAllUsers()"></th>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Nombre</th>
+                <th>Apellido</th>
+                <th>Rol</th>
+                <th>Área</th>
+                <th>Huella ID</th>
+                <th>RFID</th>
+                <th>Estado</th>
+                <th>Acción</th>
+                <th>Biométricos</th>
             </tr>
-          </thead>
-          <tbody id="employeesTableBody"></tbody>
-        </table>
-      </section>
+        </thead>
+        <tbody id="employeesTableBody"></tbody>
+    </table>
+</section>
+<!-- ========================= -->
+<!-- MODAL EDITAR USUARIO -->
+<!-- ========================= -->
+<div id="editUserModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width: 600px;">
 
+        <h3>Editar Usuario</h3>
+
+        <input type="hidden" id="editUserId">
+
+        <div class="form">
+            <div class="form-row">
+                <div>
+                    <label>Nombre de usuario</label>
+                    <input type="text" id="editUsername" placeholder="Username">
+                </div>
+                <div>
+                    <label>Contraseña (dejar vacío para no cambiar)</label>
+                    <input type="password" id="editPassword" placeholder="Nueva contraseña">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Nombre</label>
+                    <input type="text" id="editNombre" placeholder="Nombre">
+                </div>
+                <div>
+                    <label>Apellido</label>
+                    <input type="text" id="editApellido" placeholder="Apellido">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Género</label>
+                    <select id="editGenero">
+                        <option value="">Seleccione</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Femenino">Femenino</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Rol</label>
+                    <select id="editRole">
+                        <option value="empleado">Empleado</option>
+                        <option value="supervisor">Supervisor</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Fecha de nacimiento</label>
+                    <input type="date" id="editFechaNacimiento">
+                </div>
+                <div>
+                    <label>Fecha de contrato</label>
+                    <input type="date" id="editFechaContrato">
+                </div>
+            </div>
+
+            <div>
+                <label>Área de trabajo</label>
+                <input type="text" id="editAreaTrabajo" placeholder="Ej: Cocina, Limpieza">
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Huella ID</label>
+                    <input type="number" id="editHuellaId" placeholder="ID de huella">
+                </div>
+                <div>
+                    <label>RFID</label>
+                    <input type="text" id="editRfid" placeholder="Código RFID">
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button onclick="updateUser()" class="btn primary">
+                    <i class="fas fa-save"></i> Guardar cambios
+                </button>
+                <button class="btn secondary" onclick="closeModal('editUserModal')">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
       <!-- ============= -->
       <!-- HORARIOS -->
       <!-- ============= -->
