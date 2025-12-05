@@ -2981,12 +2981,7 @@ async function startPhysicalRFIDUpdate(userId, oldRfid, newRfid) {
 
 async function registerExistingUserFingerprint(userId, huellaId) {
     try {
-        console.log(`Registrando huella ${huellaId} para usuario existente ${userId}...`);
-        
-        // 1. Verificar que el backend tiene endpoints públicos
-        console.log("Verificando endpoints públicos para huella...");
-        
-        // 2. Obtener datos del usuario
+       
         const token = localStorage.getItem("jwtToken");
         const userResponse = await fetch(`${BASE_URL}/users/${userId}`, {
             headers: { "Authorization": "Bearer " + token }
@@ -3031,22 +3026,21 @@ async function registerExistingUserFingerprint(userId, huellaId) {
         // 4. PRIMERO enviar comando al ESP32 usando el endpoint de proxy del backend
         console.log("Enviando comando al ESP32 via proxy...");
         
-        const proxyResponse = await fetch(`${BASE_URL}/esp32/proxy/command`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify({
-                esp32_ip: localStorage.getItem('esp32_ip'),
-                command: 'REGISTER_FINGERPRINT',
-                huella_id: huellaId,
-                user_id: userId,
-                backend_url: BASE_URL  // Pasar URL del backend al ESP32
-            })
-        });
+          const commandResponse = await fetch(`http://${esp32IP}/command`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    command: 'REGISTER_FINGERPRINT',
+                    huella_id: huellaId,
+                    user_id: userId,
+                    timestamp: Date.now()
+                }),
+                signal: controller.signal
+                });
         
-        const proxyData = await proxyResponse.json();
+        const proxyData = await commandResponse.json();
         console.log("Respuesta proxy:", proxyData);
         
         if (!proxyData.success) {
