@@ -1831,7 +1831,8 @@ async function registerEmployee() {
 
 async function loadEmployees() {
     try {
-        const res = await fetch(`${BASE_URL}/users/?page=1&per_page=50`, {
+        // Usa el endpoint que muestra TODOS los usuarios (no solo activos)
+        const res = await fetch(`${BASE_URL}/users/all?page=1&per_page=100`, {
             headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
         });
 
@@ -1907,7 +1908,7 @@ async function loadEmployees() {
                         <button class="btn small btn-rfid" 
                                 onclick="registerRFID(${u.id})"
                                 ${u.rfid || u.is_active === false ? 'disabled' : ''}>
-                            ${u.rfid ? '✓ RFID' : 'RFID'}
+                            ${u.rfid ? 'RFID' : 'RFID'}
                         </button>
                     </div>
                 </td>
@@ -1980,7 +1981,6 @@ async function openEditUserModal(userId) {
     }
 }
 
-// ========== FUNCIÓN PARA ACTUALIZAR USUARIO ==========
 async function updateUser() {
     try {
         const token = localStorage.getItem("jwtToken");
@@ -2021,32 +2021,43 @@ async function updateUser() {
             body: JSON.stringify(userData)
         });
         
-        const data = await res.json();
+        console.log('Respuesta del servidor:', res.status);
         
-        if (res.ok && data.success) {
-            Toast.fire({
-                icon: 'success',
-                title: 'Usuario actualizado correctamente'
-            });
+        if (res.ok) {
+            const data = await res.json();
+            console.log('Datos de respuesta:', data);
             
-            // Cerrar modal
-            closeModal('editUserModal');
-            
-            // Limpiar campos
-            document.getElementById('editPassword').value = '';
-            
-            // Recargar lista de empleados
-            loadEmployees();
-            
+            if (data.success) {
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Usuario actualizado correctamente'
+                });
+                
+                // Cerrar modal
+                closeModal('editUserModal');
+                
+                // Limpiar campos
+                document.getElementById('editPassword').value = '';
+                
+                // Recargar lista de empleados
+                await loadEmployees();
+                
+                return;
+            } else {
+                throw new Error(data.msg || data.message || 'Error desconocido');
+            }
         } else {
-            throw new Error(data.msg || data.message || 'Error al actualizar usuario');
+            const errorText = await res.text();
+            console.error('Error del servidor:', errorText);
+            throw new Error(`Error HTTP ${res.status}: ${errorText}`);
         }
         
     } catch (error) {
-        console.error('Error actualizando usuario:', error);
-        Toast.fire({
+        console.error('Error completo actualizando usuario:', error);
+        Swal.fire({
             icon: 'error',
-            title: 'Error al actualizar usuario: ' + error.message
+            title: 'Error al actualizar usuario',
+            text: error.message || 'Error desconocido'
         });
     }
 }
@@ -2068,6 +2079,8 @@ async function suspendUser(userId) {
         if (confirmResult.isConfirmed) {
             const token = localStorage.getItem("jwtToken");
             
+            console.log('Suspender usuario:', userId);
+            
             const res = await fetch(`${BASE_URL}/users/${userId}/suspend`, {
                 method: 'POST',
                 headers: {
@@ -2076,38 +2089,47 @@ async function suspendUser(userId) {
                 }
             });
             
-            const data = await res.json();
+            console.log('Respuesta suspender:', res.status);
             
-            if (res.ok && data.success) {
-                Toast.fire({
-                    icon: 'success',
-                    title: 'Usuario suspendido correctamente'
-                });
+            if (res.ok) {
+                const data = await res.json();
+                console.log('Datos suspender:', data);
                 
-                // Recargar lista de empleados
-                loadEmployees();
-                
+                if (data.success) {
+                    Toast.fire({
+                        icon: 'success',
+                        title: 'Usuario suspendido correctamente'
+                    });
+                    
+                    // Recargar lista de empleados
+                    await loadEmployees();
+                    
+                } else {
+                    throw new Error(data.msg || 'Error al suspender usuario');
+                }
             } else {
-                throw new Error(data.msg || 'Error al suspender usuario');
+                const errorText = await res.text();
+                throw new Error(`Error HTTP ${res.status}: ${errorText}`);
             }
         }
         
     } catch (error) {
         console.error('Error suspendiendo usuario:', error);
-        Toast.fire({
+        Swal.fire({
             icon: 'error',
-            title: 'Error al suspender usuario: ' + error.message
+            title: 'Error al suspender usuario',
+            text: error.message
         });
     }
 }
 
-// ========== FUNCIÓN PARA ACTIVAR USUARIO ==========
 async function activateUser(userId) {
     try {
         const confirmResult = await Swal.fire({
             title: '¿Activar usuario?',
             text: 'El usuario podrá acceder nuevamente al sistema.',
             icon: 'question',
+            showCancelButton: true,
             showCancelButton: true,
             confirmButtonColor: '#28a745',
             cancelButtonColor: '#6c757d',
@@ -2118,6 +2140,8 @@ async function activateUser(userId) {
         if (confirmResult.isConfirmed) {
             const token = localStorage.getItem("jwtToken");
             
+            console.log('Activar usuario:', userId);
+            
             const res = await fetch(`${BASE_URL}/users/${userId}/activate`, {
                 method: 'POST',
                 headers: {
@@ -2126,31 +2150,39 @@ async function activateUser(userId) {
                 }
             });
             
-            const data = await res.json();
+            console.log('Respuesta activar:', res.status);
             
-            if (res.ok && data.success) {
-                Toast.fire({
-                    icon: 'success',
-                    title: 'Usuario activado correctamente'
-                });
+            if (res.ok) {
+                const data = await res.json();
+                console.log('Datos activar:', data);
                 
-                // Recargar lista de empleados
-                loadEmployees();
-                
+                if (data.success) {
+                    Toast.fire({
+                        icon: 'success',
+                        title: 'Usuario activado correctamente'
+                    });
+                    
+                    // Recargar lista de empleados
+                    await loadEmployees();
+                    
+                } else {
+                    throw new Error(data.msg || 'Error al activar usuario');
+                }
             } else {
-                throw new Error(data.msg || 'Error al activar usuario');
+                const errorText = await res.text();
+                throw new Error(`Error HTTP ${res.status}: ${errorText}`);
             }
         }
         
     } catch (error) {
         console.error('Error activando usuario:', error);
-        Toast.fire({
+        Swal.fire({
             icon: 'error',
-            title: 'Error al activar usuario: ' + error.message
+            title: 'Error al activar usuario',
+            text: error.message
         });
     }
 }
-
 // ========== FUNCIÓN PARA REMOVER HUELLA ==========
 async function removeHuella(userId) {
     try {
@@ -2200,7 +2232,108 @@ async function removeHuella(userId) {
         });
     }
 }
+async function loadSuspendedUsers() {
+    try {
+        // Puedes usar un endpoint específico o filtrar del endpoint all
+        const res = await fetch(`${BASE_URL}/users/all?page=1&per_page=100`, {
+            headers: { "Authorization": "Bearer " + localStorage.getItem("jwtToken") }
+        });
 
+        if (!res.ok) {
+            throw new Error('Error cargando usuarios');
+        }
+
+        const data = await res.json();
+        
+        // Filtrar solo usuarios suspendidos
+        const suspendedUsers = data.users.filter(u => u.is_active === false);
+        
+        console.log('Usuarios suspendidos encontrados:', suspendedUsers.length);
+        
+        if (suspendedUsers.length === 0) {
+            Toast.fire({
+                icon: 'info',
+                title: 'No hay usuarios suspendidos'
+            });
+        }
+        
+        return suspendedUsers;
+        
+    } catch (err) {
+        console.error('Error cargando usuarios suspendidos:', err);
+        return [];
+    }
+}
+
+// Actualiza bulkActivateUsers para usar la nueva función
+async function bulkActivateUsers() {
+    try {
+        // Cargar usuarios suspendidos
+        const suspendedUsers = await loadSuspendedUsers();
+        
+        if (suspendedUsers.length === 0) {
+            Toast.fire({
+                icon: 'info',
+                title: 'No hay usuarios suspendidos para activar'
+            });
+            return;
+        }
+        
+        const userIds = suspendedUsers.map(u => u.id);
+        
+        const confirmResult = await Swal.fire({
+            title: `¿Activar ${suspendedUsers.length} usuarios suspendidos?`,
+            text: 'Los usuarios podrán acceder nuevamente al sistema.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: `Sí, activar ${suspendedUsers.length} usuarios`,
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (confirmResult.isConfirmed) {
+            const token = localStorage.getItem("jwtToken");
+            
+            const res = await fetch(`${BASE_URL}/users/bulk-activate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_ids: userIds })
+            });
+            
+            const data = await res.json();
+            
+            if (res.ok && data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Activación masiva completada',
+                    html: `
+                        <div style="text-align: left;">
+                            <p><strong>Activaciones exitosas:</strong> ${data.activated.length}</p>
+                            <p><strong>Fallidas:</strong> ${data.failed.length}</p>
+                        </div>
+                    `
+                });
+                
+                // Recargar lista de empleados
+                await loadEmployees();
+                
+            } else {
+                throw new Error(data.msg || 'Error en activación masiva');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error en activación masiva:', error);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error en activación masiva: ' + error.message
+        });
+    }
+}
 // ========== FUNCIÓN PARA REMOVER RFID ==========
 async function removeRFID(userId) {
     try {
@@ -2413,18 +2546,22 @@ function getSuspendedUsers() {
     const rows = document.querySelectorAll('#employeesTableBody tr');
     
     rows.forEach(row => {
-        const statusCell = row.cells[8]; // Columna de estado
-        if (statusCell && statusCell.textContent.includes('Suspendido')) {
-            const userId = parseInt(row.cells[0].textContent);
-            if (!isNaN(userId)) {
-                suspendedUsers.push(userId);
+        const cells = row.cells;
+        if (cells.length >= 10) { // Asegurarse de que la fila tiene suficientes celdas
+            const statusCell = cells[9]; // Columna de estado (índice 9)
+            if (statusCell && (statusCell.textContent.includes('Suspendido') || 
+                               statusCell.innerHTML.includes('⛔'))) {
+                const userId = parseInt(cells[1].textContent); // ID está en la celda 1
+                if (!isNaN(userId)) {
+                    suspendedUsers.push(userId);
+                }
             }
         }
     });
     
+    console.log("Usuarios suspendidos encontrados:", suspendedUsers);
     return suspendedUsers;
 }
-
 // ========== AGREGAR ESTOS ESTILOS AL INICIO DEL ARCHIVO ==========
 const additionalStyles = `
     /* Estilos para estado de usuarios */
