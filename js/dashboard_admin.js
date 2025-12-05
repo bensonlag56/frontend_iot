@@ -1916,7 +1916,7 @@ async function loadEmployees() {
 async function updateRFIDFromTable(userId, currentRfid) {
     try {
         const confirm = await Swal.fire({
-            title: 'Actualizar RFID',
+            title: 'Eliminar RFID',
             html: `
                 <div style="text-align: left; font-size: 14px;">
                     <p><strong>Usuario ID:</strong> ${userId}</p>
@@ -1928,7 +1928,7 @@ async function updateRFIDFromTable(userId, currentRfid) {
             icon: 'question',
             showCancelButton: true,
             showDenyButton: true,
-            confirmButtonText: '',
+           
             denyButtonText: 'Eliminar RFID Actual',
             cancelButtonText: 'Cancelar',
             width: 500
@@ -2705,7 +2705,7 @@ async function updateUser() {
     }
 }
 
-// ========== FUNCIÓN PARA ACTUALIZAR RFID FÍSICAMENTE ==========
+
 async function startPhysicalRFIDUpdate(userId, oldRfid, newRfid) {
     try {
         console.log(`Actualizando RFID físicamente para usuario ${userId}: ${oldRfid} -> ${newRfid}`);
