@@ -5000,18 +5000,31 @@ async function loadAttendanceData() {
         // Renderizar cada registro
         data.asistencias.forEach(record => {
             // Formatear fecha/hora
-            const formatDateTime = (isoString) => {
-                if (!isoString) return '-';
-                const date = new Date(isoString);
-                return date.toLocaleString('es-PE', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            };
-            
+           const formatDateTime = (isoString) => {
+    if (!isoString) return '-';
+    
+    // Crear fecha desde string ISO
+    const date = new Date(isoString);
+    
+    // Ajustar a hora Perú (UTC-5)
+    // Convertir a milisegundos UTC
+    const utcTime = date.getTime();
+    
+    // Aplicar offset de Perú (-5 horas)
+    const peruOffset = -5 * 60 * 60000; // -5 horas en milisegundos
+    const peruTime = new Date(utcTime + peruOffset);
+    
+    // Formatear en español peruano
+    return peruTime.toLocaleString('es-PE', {
+        timeZone: 'America/Lima', // Especificar zona horaria de Perú
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+};
             // Determinar clase CSS para estado
             let statusClass = '';
             let statusText = record.estado_entrada || 'N/A';
