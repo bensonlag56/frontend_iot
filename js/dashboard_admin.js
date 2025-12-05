@@ -1849,7 +1849,7 @@ async function loadEmployees() {
         if (data.users && data.users.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="12" style="text-align: center; padding: 20px;">
+                    <td colspan="13" style="text-align: center; padding: 20px;">
                         No hay empleados registrados
                     </td>
                 </tr>
@@ -1865,6 +1865,7 @@ async function loadEmployees() {
 
             const tr = document.createElement("tr");
             tr.innerHTML = `
+                <td><input type="checkbox" class="user-checkbox" value="${u.id}"></td>
                 <td>${u.id}</td>
                 <td>${u.username}</td>
                 <td>${u.nombre}</td>
@@ -2424,7 +2425,130 @@ function getSuspendedUsers() {
     return suspendedUsers;
 }
 
-
+// ========== AGREGAR ESTOS ESTILOS AL INICIO DEL ARCHIVO ==========
+const additionalStyles = `
+    /* Estilos para estado de usuarios */
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        display: inline-block;
+        min-width: 80px;
+        text-align: center;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    
+    .status-suspended {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+    
+    /* Estilos para botones de acción */
+    .btn-edit {
+        background: #17a2b8;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-right: 5px;
+    }
+    
+    .btn-edit:hover {
+        background: #138496;
+    }
+    
+    .btn-suspend {
+        background: #ffc107;
+        color: black;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    
+    .btn-suspend:hover {
+        background: #e0a800;
+    }
+    
+    .btn-activate {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    
+    .btn-activate:hover {
+        background: #218838;
+    }
+    
+    /* Estilos para el modal de edición */
+    .modal-content .form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .modal-content .form label {
+        font-weight: 500;
+        margin-top: 10px;
+    }
+    
+    .modal-content .form input,
+    .modal-content .form select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    
+    .form-row {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .form-row > div {
+        flex: 1;
+    }
+    
+    /* Estilos para acciones masivas */
+    .bulk-actions {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .bulk-btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        border: none;
+    }
+    
+    .bulk-suspend {
+        background: #ffc107;
+        color: black;
+    }
+    
+    .bulk-activate {
+        background: #28a745;
+        color: white;
+    }
+`;
 
 // Agregar estilos al documento
 if (typeof document !== 'undefined') {
@@ -2791,7 +2915,171 @@ async function registerRFID(userId) {
         });
     }
 }
-// Agrega después de las otras funciones de inicialización
+// ========== FUNCIONES FALTANTES ==========
+
+async function sendCommandToESP32Direct(command, huellaId = null, userId = null, isAdmin = false) {
+    const esp32IP = localStorage.getItem('esp32_ip');
+    if (!esp32IP) {
+        throw new Error('IP del ESP32 no configurada');
+    }
+
+    console.log(`Enviando comando ${command} al ESP32 ${esp32IP}...`);
+    
+    try {
+        const response = await fetch(`http://${esp32IP}/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                command: command,
+                huella_id: huellaId,
+                user_id: userId,
+                timestamp: Date.now(),
+                is_admin: isAdmin
+            }),
+            signal: AbortSignal.timeout(10000) // Timeout de 10 segundos
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log("Respuesta del ESP32:", data);
+            return data;
+        } else {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (directError) {
+        console.log("Conexión directa falló:", directError.message);
+        
+        // Intentar con XMLHttpRequest
+        try {
+            const result = await sendCommandToESP32(command, huellaId, userId);
+            return result;
+        } catch (xhrError) {
+            console.log("XMLHttpRequest también falló:", xhrError.message);
+            throw new Error(
+                `No se pudo conectar al ESP32.\n\n` +
+                `Verifique que:\n` +
+                `1. El ESP32 esté encendido\n` +
+                `2. Su computadora esté en la misma red WiFi\n` +
+                `3. La IP ${esp32IP} sea correcta\n` +
+                `4. Pueda acceder a http://${esp32IP} desde el navegador`
+            );
+        }
+    }
+}
+
+// Funciones para asistencia que faltan
+async function loadUsersForAttendance() {
+    try {
+        const res = await fetch(`${BASE_URL}/users/?page=1&per_page=100`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        const select = document.getElementById('attendanceUserSelect');
+        if (!select) return;
+        
+        // Limpiar opciones excepto la primera
+        while (select.options.length > 1) {
+            select.remove(1);
+        }
+        
+        // Agregar usuarios
+        data.users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.nombre} ${user.apellido}`;
+            select.appendChild(option);
+        });
+        
+    } catch (err) {
+        console.error('Error cargando usuarios para asistencia:', err);
+    }
+}
+
+async function loadAttendanceSummary() {
+    // Esta función se llamará cuando se cargue la sección de asistencias
+    console.log("Cargando resumen de asistencias...");
+    // Implementa según tu lógica
+}
+
+// Función para el botón de cargar asistencias
+document.getElementById('btnLoadAttendance')?.addEventListener('click', loadAttendanceData);
+
+async function loadAttendanceData() {
+    try {
+        const userId = document.getElementById('attendanceUserSelect')?.value || '';
+        const startDate = document.getElementById('attendanceStart')?.value || '';
+        const endDate = document.getElementById('attendanceEnd')?.value || '';
+        const area = document.getElementById('attendanceArea')?.value || '';
+        
+        let url = `${BASE_URL}/attendance/reports`;
+        const params = new URLSearchParams();
+        
+        if (userId) params.append('user_id', userId);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (area) params.append('area', area);
+        
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
+        
+        const res = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) throw new Error('Error cargando asistencias');
+        
+        const data = await res.json();
+        const tbody = document.getElementById('attendanceTableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        if (!data.data || data.data.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 20px;">
+                        No se encontraron registros de asistencia
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        data.data.forEach(record => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${record.user_nombre || 'N/A'}</td>
+                <td>${record.area_trabajo || 'N/A'}</td>
+                <td>${record.entry_time || 'N/A'}</td>
+                <td>${record.exit_time || 'En curso'}</td>
+                <td>${record.duration || 'N/A'}</td>
+                <td>${record.status || 'N/A'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+    } catch (err) {
+        console.error('Error cargando asistencias:', err);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error al cargar asistencias'
+        });
+    }
+}
+function toggleSelectAllUsers() {
+    const selectAll = document.getElementById('selectAllUsers');
+    const checkboxes = document.querySelectorAll('.user-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
 function initializeSchedules() {
     const btnSaveSchedule = document.getElementById("btn-save-schedule");
     if (btnSaveSchedule) {
