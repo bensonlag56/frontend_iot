@@ -651,14 +651,28 @@
       <!-- HORARIOS -->
       <!-- ============= -->
       <section id="section-schedules" class="pane" style="display:none;">
-        <h2>Horarios</h2>
+    <h2>Horarios</h2>
 
-        <button id="btnOpenCreateSchedule" class="btn primary" style="margin-bottom:15px;">
-          Crear horario
-        </button>
+    <button id="btnOpenCreateSchedule" class="btn primary" style="margin-bottom:15px;">
+        <i class="fas fa-plus"></i> Crear horario
+    </button>
 
-        <div id="schedulesContainer" class="cards-container"></div>
-      </section>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Hora Entrada</th>
+                <th>Hora Salida</th>
+                <th>Días</th>
+                <th>Tolerancia Entrada</th>
+                <th>Tolerancia Salida</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="schedulesTableBody"></tbody>
+    </table>
+</section>
       <section id="section-admin-registration" class="pane" style="display:none;">
   <h2>Registrar mis Credenciales Biométricas</h2>
 

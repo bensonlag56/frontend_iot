@@ -4960,26 +4960,125 @@ function initializeSchedules() {
     if (btnSaveSchedule) {
         btnSaveSchedule.addEventListener("click", saveSchedule);
     }
+    
+    // Agregar evento al botón de crear horario
+    const btnOpenCreateSchedule = document.getElementById("btnOpenCreateSchedule");
+    if (btnOpenCreateSchedule) {
+        btnOpenCreateSchedule.addEventListener("click", () => {
+            openModal('createScheduleModal');
+        });
+    }
+    
+    // Agregar evento al botón de guardar horario en el modal
+    const btnSaveScheduleModal = document.getElementById("btnSaveSchedule");
+    if (btnSaveScheduleModal) {
+        btnSaveScheduleModal.addEventListener("click", saveSchedule);
+    }
+    
+    // Agregar evento al botón de guardar edición de horario
+    const btnSaveEditedSchedule = document.getElementById("btnSaveEditedSchedule");
+    if (btnSaveEditedSchedule) {
+        btnSaveEditedSchedule.addEventListener("click", saveEditedSchedule);
+    }
 }
-
+async function saveEditedSchedule() {
+    try {
+        const scheduleId = document.getElementById('editScheduleId').value;
+        const nombre = document.getElementById('editScheduleName').value.trim();
+        const hora_entrada = document.getElementById('editScheduleEntrada').value;
+        const hora_salida = document.getElementById('editScheduleSalida').value;
+        const tipo = document.getElementById('editScheduleTipo').value;
+        const diasElements = document.querySelectorAll('.edit-sch-day:checked');
+        const tolerancia_entrada = parseInt(document.getElementById('editScheduleTolEnt').value) || 0;
+        const tolerancia_salida = parseInt(document.getElementById('editScheduleTolSal').value) || 0;
+        
+        if (!scheduleId) {
+            Toast.fire({ icon: 'error', title: 'ID de horario no válido' });
+            return;
+        }
+        
+        if (!nombre) {
+            Toast.fire({ icon: 'warning', title: 'El nombre es obligatorio' });
+            return;
+        }
+        
+        if (!hora_entrada || !hora_salida) {
+            Toast.fire({ icon: 'warning', title: 'Las horas de entrada y salida son obligatorias' });
+            return;
+        }
+        
+        if (diasElements.length === 0) {
+            Toast.fire({ icon: 'warning', title: 'Seleccione al menos un día' });
+            return;
+        }
+        
+        const dias = Array.from(diasElements).map(d => d.value).join(',');
+        
+        const payload = {
+            nombre,
+            hora_entrada,
+            hora_salida,
+            tipo,
+            dias,
+            tolerancia_entrada,
+            tolerancia_salida
+        };
+        
+        console.log("Actualizando horario:", payload);
+        
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
+            method: "PUT",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.msg || errorData.message || `Error ${res.status}`);
+        }
+        
+        Toast.fire({ 
+            icon: 'success', 
+            title: 'Horario actualizado correctamente' 
+        });
+        
+        closeModal('editScheduleModal');
+        loadSchedules();
+        
+    } catch (err) {
+        console.error("Error actualizando horario:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error al actualizar horario: ' + err.message 
+        });
+    }
+}
 async function loadSchedules() {
     try {
-        const res = await fetch(`${BASE_URL}/schedules/?page=1&per_page=50`, {
+        const res = await fetch(`${BASE_URL}/schedules/`, {
             headers: getAuthHeaders()
         });
         
         if (!res.ok) {
-            Toast.fire({ icon: 'error', title: 'Error cargando horarios' });
+            Toast.fire({ 
+                icon: 'error', 
+                title: 'Error cargando horarios: ' + res.status 
+            });
             return;
         }
         
         const data = await res.json();
+        console.log("Horarios cargados:", data);
+        
         const tbody = document.getElementById("schedulesTableBody");
-        if (!tbody) return;
+        if (!tbody) {
+            console.error("No se encontró schedulesTableBody");
+            return;
+        }
         
         tbody.innerHTML = "";
         
-        if (!data.schedules || data.schedules.length === 0) {
+        if (!data || data.length === 0) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="8" style="text-align: center; padding: 20px;">
@@ -4990,35 +5089,279 @@ async function loadSchedules() {
             return;
         }
         
-        data.schedules.forEach(s => {
+        data.forEach(s => {
             const tr = document.createElement("tr");
             tr.innerHTML = `
                 <td>${s.id}</td>
                 <td>${s.nombre}</td>
-                <td>${s.hora_entrada}</td>
-                <td>${s.hora_salida}</td>
-                <td>${s.dias}</td>
+                <td>${s.hora_entrada || 'N/A'}</td>
+                <td>${s.hora_salida || 'N/A'}</td>
+                <td>${s.dias || 'N/A'}</td>
                 <td>${s.tolerancia_entrada || 0} min</td>
                 <td>${s.tolerancia_salida || 0} min</td>
                 <td>
-                    <button class="btn small" onclick="editSchedule(${s.id})">Editar</button>
+                    <div class="action-buttons">
+                        <button class="btn small btn-edit" onclick="openEditScheduleModal(${s.id})">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn small btn-danger" onclick="deleteSchedule(${s.id})">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                        <button class="btn small btn-secondary" onclick="assignScheduleToUser(${s.id})">
+                            <i class="fas fa-user-plus"></i> Asignar
+                        </button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
         });
         
+        Toast.fire({ 
+            icon: 'success', 
+            title: `Cargados ${data.length} horarios` 
+        });
+        
     } catch (err) {
-        console.error(err);
-        Toast.fire({ icon: 'error', title: 'Error cargando horarios' });
+        console.error("Error cargando horarios:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error cargando horarios: ' + err.message 
+        });
     }
 }
-function initializeAttendance() {
-    // Inicializa funciones de asistencia si las necesitas
-    console.log("Inicializando módulo de asistencia");
+async function assignSchedule() {
+    try {
+        const scheduleId = document.getElementById('assignScheduleId').value;
+        const userId = document.getElementById('assignUserSelect').value;
+        const startDate = document.getElementById('assignStartDate').value;
+        const endDate = document.getElementById('assignEndDate').value || null;
+        
+        if (!userId) {
+            Toast.fire({ icon: 'warning', title: 'Seleccione un usuario' });
+            return;
+        }
+        
+        if (!startDate) {
+            Toast.fire({ icon: 'warning', title: 'La fecha de inicio es obligatoria' });
+            return;
+        }
+        
+        const payload = {
+            user_id: parseInt(userId),
+            schedule_id: parseInt(scheduleId),
+            start_date: startDate
+        };
+        
+        if (endDate) {
+            payload.end_date = endDate;
+        }
+        
+        console.log("Asignando horario:", payload);
+        
+        const res = await fetch(`${BASE_URL}/schedules/assign`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.msg || data.message || `Error ${res.status}`);
+        }
+        
+        Toast.fire({ 
+            icon: 'success', 
+            title: 'Horario asignado correctamente' 
+        });
+        
+        closeModal('assignScheduleModal');
+        
+    } catch (err) {
+        console.error("Error asignando horario:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error al asignar horario: ' + err.message 
+        });
+    }
+}
+
+// Agregar evento al botón de asignar horario
+document.addEventListener('DOMContentLoaded', function() {
+    const btnAssignSchedule = document.getElementById('btnAssignSchedule');
+    if (btnAssignSchedule) {
+        btnAssignSchedule.addEventListener('click', async function() {
+            await assignSchedule();
+        });
+    }
+});
+async function deleteSchedule(scheduleId) {
+    try {
+        const confirmResult = await Swal.fire({
+            title: '¿Eliminar horario?',
+            text: 'Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (!confirmResult.isConfirmed) return;
+        
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
+            method: "DELETE",
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.msg || errorData.message || `Error ${res.status}`);
+        }
+        
+        Toast.fire({ 
+            icon: 'success', 
+            title: 'Horario eliminado correctamente' 
+        });
+        
+        loadSchedules();
+        
+    } catch (err) {
+        console.error("Error eliminando horario:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error al eliminar horario: ' + err.message 
+        });
+    }
+}
+
+async function openEditScheduleModal(scheduleId) {
+    try {
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) {
+            throw new Error('Error cargando horario');
+        }
+        
+        const schedule = await res.json();
+        
+        // Llenar formulario
+        document.getElementById('editScheduleId').value = schedule.id;
+        document.getElementById('editScheduleName').value = schedule.nombre || '';
+        document.getElementById('editScheduleEntrada').value = schedule.hora_entrada || '';
+        document.getElementById('editScheduleSalida').value = schedule.hora_salida || '';
+        document.getElementById('editScheduleTipo').value = schedule.tipo || 'fijo';
+        document.getElementById('editScheduleTolEnt').value = schedule.tolerancia_entrada || 0;
+        document.getElementById('editScheduleTolSal').value = schedule.tolerancia_salida || 0;
+        
+        // Marcar días
+        document.querySelectorAll('.edit-sch-day').forEach(cb => {
+            cb.checked = false;
+        });
+        
+        if (schedule.dias) {
+            const diasArray = schedule.dias.split(',');
+            diasArray.forEach(dia => {
+                const checkbox = document.querySelector(`.edit-sch-day[value="${dia.trim()}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        }
+        
+        // Abrir modal
+        openModal('editScheduleModal');
+        
+    } catch (err) {
+        console.error("Error abriendo modal de edición:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error al cargar horario' 
+        });
+    }
 }
 async function saveSchedule() {
-    // Implementa según tu lógica
-    console.log("Guardar horario");
+    try {
+        // Obtener datos del modal
+        const nombre = document.getElementById("schName").value.trim();
+        const hora_entrada = document.getElementById("schEntrada").value;
+        const hora_salida = document.getElementById("schSalida").value;
+        const tipo = document.getElementById("schTipo").value;
+        const diasElements = document.querySelectorAll('.sch-day:checked');
+        const tolerancia_entrada = parseInt(document.getElementById("schTolEnt").value) || 0;
+        const tolerancia_salida = parseInt(document.getElementById("schTolSal").value) || 0;
+        
+        // Validaciones
+        if (!nombre) {
+            Toast.fire({ icon: 'warning', title: 'El nombre es obligatorio' });
+            return;
+        }
+        
+        if (!hora_entrada || !hora_salida) {
+            Toast.fire({ icon: 'warning', title: 'Las horas de entrada y salida son obligatorias' });
+            return;
+        }
+        
+        if (diasElements.length === 0) {
+            Toast.fire({ icon: 'warning', title: 'Seleccione al menos un día' });
+            return;
+        }
+        
+        // Preparar días como string separado por comas
+        const dias = Array.from(diasElements).map(d => d.value).join(',');
+        
+        const payload = {
+            nombre,
+            hora_entrada,
+            hora_salida,
+            tipo,
+            dias,
+            tolerancia_entrada,
+            tolerancia_salida
+        };
+        
+        console.log("Enviando horario:", payload);
+        
+        const res = await fetch(`${BASE_URL}/schedules/`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.msg || data.message || `Error ${res.status}`);
+        }
+        
+        Toast.fire({ 
+            icon: 'success', 
+            title: 'Horario creado correctamente' 
+        });
+        
+        // Cerrar modal y limpiar
+        closeModal('createScheduleModal');
+        document.getElementById("schName").value = "";
+        document.getElementById("schEntrada").value = "";
+        document.getElementById("schSalida").value = "";
+        document.getElementById("schTipo").value = "fijo";
+        document.getElementById("schTolEnt").value = "0";
+        document.getElementById("schTolSal").value = "0";
+        document.querySelectorAll('.sch-day').forEach(cb => cb.checked = false);
+        
+        // Recargar lista
+        loadSchedules();
+        
+    } catch (err) {
+        console.error("Error creando horario:", err);
+        Toast.fire({ 
+            icon: 'error', 
+            title: 'Error al crear horario: ' + err.message 
+        });
+    }
 }
 function getAuthHeaders() {
     const token = localStorage.getItem("jwtToken");
