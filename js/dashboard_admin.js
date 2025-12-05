@@ -4811,7 +4811,13 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
     try {
         console.log(`Enviando ${command} via proxy del backend...`);
         
-        // USAR SIEMPRE EL BACKEND COMO PROXY
+        // OBTENER LA IP DEL ESP32 DESDE LOCALSTORAGE
+        const esp32IP = localStorage.getItem('esp32_ip');
+        if (!esp32IP) {
+            throw new Error('IP del ESP32 no configurada en el navegador');
+        }
+        
+        // USAR EL BACKEND COMO PROXY
         const response = await fetch(`${BASE_URL}/esp32/proxy/command`, {
             method: 'POST',
             headers: {
@@ -4819,11 +4825,11 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
                 'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
             },
             body: JSON.stringify({
+                esp32_ip: esp32IP,  // <-- ¡ESTO ES LO QUE FALTA!
                 command: command,
                 huella_id: huellaId,
                 user_id: userId,
                 is_admin: isAdmin
-                // NOTA: NO enviar esp32_ip aquí, el backend ya lo sabe
             })
         });
         
@@ -4839,7 +4845,6 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
         throw new Error(`No se pudo enviar comando: ${error.message}`);
     }
 }
-
 // Funciones para asistencia que faltan
 async function loadUsersForAttendance() {
     try {
