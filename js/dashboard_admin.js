@@ -4832,32 +4832,64 @@ async function sendCommandToESP32Direct(command, huellaId = null, userId = null,
 
 async function loadUsersForAttendance() {
     try {
-        const res = await fetch(`${BASE_URL}/users`, {
+        const res = await fetch(`${BASE_URL}/attendance/admin/users`, {
             headers: getAuthHeaders()
         });
         
-        if (!res.ok) return;
-        
-        const data = await res.json();
-        const select = document.getElementById('attendanceUserSelect');
-        if (!select) return;
-        
-        while (select.options.length > 1) {
-            select.remove(1);
+        if (!res.ok) {
+            // Si falla el endpoint específico, intentar con el general
+            const fallbackRes = await fetch(`${BASE_URL}/users`, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!fallbackRes.ok) throw new Error('Error cargando usuarios');
+            
+            const fallbackData = await fallbackRes.json();
+            populateUserSelect(fallbackData.users || []);
+            return;
         }
         
-        data.users.forEach(user => {
-            const option = document.createElement('option');
-            option.value = user.id;
-            option.textContent = `${user.nombre} ${user.apellido}`;
-            select.appendChild(option);
-        });
+        const data = await res.json();
+        if (data.success && data.users) {
+            populateUserSelect(data.users);
+        } else {
+            populateUserSelect([]);
+        }
         
     } catch (err) {
         console.error('Error cargando usuarios para asistencia:', err);
+        Toast.fire({
+            icon: 'warning',
+            title: 'No se pudieron cargar todos los usuarios'
+        });
+        // Poblar con al menos una opción vacía
+        populateUserSelect([]);
     }
 }
 
+function populateUserSelect(users) {
+    const select = document.getElementById('attendanceUserSelect');
+    if (!select) return;
+    
+    // Guardar selección actual
+    const currentValue = select.value;
+    
+    // Limpiar y agregar opción "Todos"
+    select.innerHTML = '<option value="">Todos los empleados</option>';
+    
+    // Agregar usuarios
+    users.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user.id;
+        option.textContent = `${user.nombre} ${user.apellido} (${user.area_trabajo || 'Sin área'})`;
+        select.appendChild(option);
+    });
+    
+    // Restaurar selección anterior si existe
+    if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+        select.value = currentValue;
+    }
+}
 async function loadAttendanceSummary() {
     console.log("Cargando resumen de asistencias...");
  
@@ -4871,7 +4903,8 @@ async function loadAttendanceData() {
         const endDate = document.getElementById('attendanceEnd')?.value || '';
         const area = document.getElementById('attendanceArea')?.value || '';
         
-        let url = `${BASE_URL}/attendance/reports`;
+        // Construir URL con el endpoint correcto
+        let url = `${BASE_URL}/attendance/admin/report`;
         const params = new URLSearchParams();
         
         if (userId) params.append('user_id', userId);
@@ -4883,11 +4916,16 @@ async function loadAttendanceData() {
             url += `?${params.toString()}`;
         }
         
+        console.log('Cargando asistencias desde:', url);
+        
         const res = await fetch(url, {
             headers: getAuthHeaders()
         });
         
-        if (!res.ok) throw new Error('Error cargando asistencias');
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`Error ${res.status}: ${errorText}`);
+        }
         
         const data = await res.json();
         const tbody = document.getElementById('attendanceTableBody');
@@ -4895,35 +4933,90 @@ async function loadAttendanceData() {
         
         tbody.innerHTML = '';
         
-        if (!data.data || data.data.length === 0) {
+        if (!data.success || !data.asistencias || data.asistencias.length === 0) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="6" style="text-align: center; padding: 20px;">
-                        No se encontraron registros de asistencia
+                        No se encontraron registros de asistencia con los filtros seleccionados
                     </td>
                 </tr>
             `;
             return;
         }
         
-        data.data.forEach(record => {
+        // Renderizar cada registro
+        data.asistencias.forEach(record => {
+            // Formatear fecha/hora
+            const formatDateTime = (isoString) => {
+                if (!isoString) return '-';
+                const date = new Date(isoString);
+                return date.toLocaleString('es-PE', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            };
+            
+            // Determinar clase CSS para estado
+            let statusClass = '';
+            let statusText = record.estado_entrada || 'N/A';
+            if (statusText === 'presente') {
+                statusClass = 'status-success';
+                statusText = 'A tiempo';
+            } else if (statusText === 'tarde') {
+                statusClass = 'status-error';
+                statusText = 'Tarde';
+            } else if (statusText === 'fuera_de_horario') {
+                statusClass = 'status-error';
+                statusText = 'Fuera de horario';
+            } else {
+                statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);
+            }
+            
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${record.user_nombre || 'N/A'}</td>
+                <td>
+                    <div style="font-weight: 500;">${record.nombre} ${record.apellido}</div>
+                    <small style="color: #666;">@${record.username}</small>
+                </td>
                 <td>${record.area_trabajo || 'N/A'}</td>
-                <td>${record.entry_time || 'N/A'}</td>
-                <td>${record.exit_time || 'En curso'}</td>
-                <td>${record.duration || 'N/A'}</td>
-                <td>${record.status || 'N/A'}</td>
+                <td>${formatDateTime(record.entry_time)}</td>
+                <td>${record.exit_time ? formatDateTime(record.exit_time) : 'En curso'}</td>
+                <td>${record.duracion_jornada || 'N/A'}</td>
+                <td>
+                    <span class="status-badge ${statusClass}">
+                        ${statusText}
+                    </span>
+                </td>
             `;
             tbody.appendChild(tr);
         });
         
+        // Mostrar mensaje de éxito
+        Toast.fire({
+            icon: 'success',
+            title: `Cargadas ${data.asistencias.length} asistencias`
+        });
+        
     } catch (err) {
         console.error('Error cargando asistencias:', err);
-        Toast.fire({
+        
+        // Mostrar error detallado
+        let errorMessage = 'Error al cargar asistencias';
+        if (err.message.includes('403')) {
+            errorMessage = 'No tiene permisos para ver asistencias';
+        } else if (err.message.includes('401')) {
+            errorMessage = 'Sesión expirada. Por favor, inicie sesión nuevamente';
+        } else {
+            errorMessage = err.message;
+        }
+        
+        Swal.fire({
             icon: 'error',
-            title: 'Error al cargar asistencias'
+            title: 'Error',
+            text: errorMessage
         });
     }
 }
@@ -5634,6 +5727,30 @@ function getAuthHeaders() {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json"
     };
+}
+// ========== FUNCIÓN PARA INICIALIZAR ATENDENCIAS ==========
+function initializeAttendance() {
+    console.log("Inicializando sistema de asistencias...");
+    
+    const btnLoadAttendance = document.getElementById('btnLoadAttendance');
+    if (btnLoadAttendance) {
+        btnLoadAttendance.addEventListener('click', loadAttendanceData);
+    }
+    
+    // Establecer fechas por defecto para reportes
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    const attendanceStart = document.getElementById('attendanceStart');
+    const attendanceEnd = document.getElementById('attendanceEnd');
+    
+    if (attendanceStart) {
+        attendanceStart.value = firstDayOfMonth.toISOString().split('T')[0];
+    }
+    
+    if (attendanceEnd) {
+        attendanceEnd.value = today.toISOString().split('T')[0];
+    }
 }
 document.addEventListener("DOMContentLoaded", function () {
     if (!localStorage.getItem('esp32_ip')) {
