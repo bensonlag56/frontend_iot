@@ -2507,10 +2507,26 @@ async function updateUserRFID(userId, oldRfid, newRfid) {
     }
 }
 
+// ========== MODIFICAR LA FUNCIÓN updateUser() ==========
 async function updateUser() {
     try {
         const token = localStorage.getItem("jwtToken");
         const userId = document.getElementById('editUserId').value;
+        
+        // Obtener información actual del usuario (para verificar si es admin)
+        const currentUserRes = await fetch(`${BASE_URL}/users/${userId}`, {
+            headers: { 
+                "Authorization": "Bearer " + token,
+                "Content-Type": "application/json"
+            }
+        });
+        
+        if (!currentUserRes.ok) {
+            throw new Error('No se pudo obtener información actual del usuario');
+        }
+        
+        const currentUserData = await currentUserRes.json();
+        const isCurrentlyAdmin = currentUserData.role === 'admin';
         
         // Recopilar datos del formulario
         const userData = {
@@ -2529,6 +2545,42 @@ async function updateUser() {
             userData.role = roleSelect.value;
         }
         
+        // Verificar si el usuario actual está cambiando de admin a empleado
+        const isChangingToEmployee = isCurrentlyAdmin && userData.role === 'empleado';
+        
+        // Si el usuario está cambiando de admin a empleado, mostrar advertencia
+        if (isChangingToEmployee) {
+            const confirmResult = await Swal.fire({
+                title: '¿Cambiar rol a Empleado?',
+                html: `
+                    <div style="text-align: left; font-size: 14px;">
+                        <p><strong>ADVERTENCIA:</strong> Está a punto de cambiar su rol de Administrador a Empleado.</p>
+                        <p><strong>Consecuencias:</strong></p>
+                        <ul>
+                            <li>Perderá acceso al panel de administración</li>
+                            <li>No podrá gestionar usuarios, horarios ni registros</li>
+                            <li>Solamente podrá registrar sus asistencias</li>
+                            <li>Necesitará que otro administrador le restablezca el rol</li>
+                        </ul>
+                        <p style="color: #dc3545; font-weight: bold;">
+                            ¿Está seguro de continuar?
+                        </p>
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, cambiar a empleado',
+                cancelButtonText: 'Cancelar',
+                width: 600
+            });
+            
+            if (!confirmResult.isConfirmed) {
+                return; // Cancelar la operación
+            }
+        }
+        
         // Agregar contraseña si se proporciona
         const password = document.getElementById('editPassword').value;
         if (password) {
@@ -2543,11 +2595,8 @@ async function updateUser() {
             userData.huella_id = null;
         }
         
-        // Manejar RFID - Solo guardamos el valor del formulario
+        // Manejar RFID
         const rfid = document.getElementById('editRfid').value;
-        const oldRfid = document.getElementById('editRfid').getAttribute('data-old-value');
-        
-        // Solo incluir RFID si hay valor
         if (rfid && rfid.trim() !== '') {
             userData.rfid = rfid.trim();
         } else {
@@ -2605,89 +2654,112 @@ async function updateUser() {
             // Recargar lista de empleados
             await loadEmployees();
             
-            // Si se cambió huella o RFID, preguntar si quiere registrar físicamente
-            const oldHuellaId = document.getElementById('editHuellaId').getAttribute('data-old-value');
-            const oldRfidValue = document.getElementById('editRfid').getAttribute('data-old-value');
-            const newHuellaId = userData.huella_id;
-            const newRfidValue = userData.rfid;
-            
-            // 1. Para HUELLA - SOLO si el usuario YA tenía una huella (oldHuellaId existe)
-            // y cambió a una NUEVA huella
-            if (newHuellaId && newHuellaId !== oldHuellaId) {
-                // Mostrar opción para registrar huella físicamente
-                const confirm = await Swal.fire({
-                    title: 'Nueva huella asignada',
-                    text: `¿Desea registrar físicamente la huella ID ${newHuellaId} en el ESP32?`,
-                    html: `
-                        <div style="text-align: left; font-size: 14px;">
-                            <p><strong>Usuario ID:</strong> ${userId}</p>
-                            <p><strong>Huella Anterior:</strong> ${oldHuellaId || 'Ninguna'}</p>
-                            <p><strong>Huella Nueva:</strong> ${newHuellaId}</p>
-                            <p style="color: blue; margin-top: 10px;">
-                                <i class="fas fa-info-circle"></i> El ID de huella ya está asignado en la base de datos. Ahora necesita registrarlo físicamente en el ESP32.
-                            </p>
-                        </div>
-                    `,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Sí, registrar físicamente',
-                    cancelButtonText: 'No, solo actualizar ID',
-                    showDenyButton: true,
-                    denyButtonText: 'Cancelar todo',
-                    width: 500
-                });
+            // Si se cambió de admin a empleado, manejar la sesión actual
+            if (isChangingToEmployee) {
+                // Verificar si el usuario modificado es el mismo que está logueado
+                const payload = decodeJWT(token);
+                const loggedInUserId = payload.sub;
                 
-                if (confirm.isConfirmed) {
-                    // Usar la NUEVA función para usuarios existentes
-                    await registerExistingUserFingerprint(userId, newHuellaId);
-                } else if (confirm.isDenied) {
-                    // Opción de cancelar (no hacer nada)
-                    console.log('Usuario canceló registro físico de huella');
+                if (parseInt(userId) === parseInt(loggedInUserId)) {
+                    // Esperar un momento antes de redirigir
+                    setTimeout(() => {
+                        Swal.fire({
+                            title: 'Rol Actualizado',
+                            html: `
+                                <div style="text-align: center;">
+                                    <p>Su rol ha sido cambiado a <strong>Empleado</strong>.</p>
+                                    <p>Será redirigido a la página de inicio de sesión.</p>
+                                    <div class="spinner-border text-primary mt-3" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                </div>
+                            `,
+                            icon: 'info',
+                            showConfirmButton: false,
+                            timer: 3000
+                        }).then(() => {
+                            // Cerrar sesión y redirigir
+                            localStorage.clear();
+                            window.location.href = "../pages/login.html";
+                        });
+                    }, 1000);
                 }
-            }
-            
-            // 2. Para RFID - SOLO si el usuario YA tenía un RFID (oldRfidValue existe)
-            // y cambió a un NUEVO RFID
-            if (newRfidValue && newRfidValue !== oldRfidValue) {
-                // Mostrar opción para registrar RFID físicamente usando el ESP32
-                const confirm = await Swal.fire({
-                    title: 'Actualizar RFID Físicamente',
-                    text: `¿Desea leer el nuevo RFID físicamente desde el ESP32?`,
-                    html: `
-                        <div style="text-align: left; font-size: 14px;">
-                            <p><strong>Usuario ID:</strong> ${userId}</p>
-                            <p><strong>RFID Anterior:</strong> ${oldRfidValue || 'Ninguno'}</p>
-                            <p><strong>RFID Nuevo (en BD):</strong> ${newRfidValue}</p>
-                            <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                                <p style="margin: 0; color: #856404;">
-                                    <i class="fas fa-exclamation-triangle"></i> 
-                                    <strong>IMPORTANTE:</strong> Necesita leer físicamente el nuevo RFID en el ESP32
+            } else {
+                // Manejo normal para huella y RFID (mantener el código existente)
+                const oldHuellaId = document.getElementById('editHuellaId').getAttribute('data-old-value');
+                const oldRfidValue = document.getElementById('editRfid').getAttribute('data-old-value');
+                const newHuellaId = userData.huella_id;
+                const newRfidValue = userData.rfid;
+                
+                // Para HUELLA
+                if (newHuellaId && newHuellaId !== oldHuellaId) {
+                    const confirm = await Swal.fire({
+                        title: 'Nueva huella asignada',
+                        text: `¿Desea registrar físicamente la huella ID ${newHuellaId} en el ESP32?`,
+                        html: `
+                            <div style="text-align: left; font-size: 14px;">
+                                <p><strong>Usuario ID:</strong> ${userId}</p>
+                                <p><strong>Huella Anterior:</strong> ${oldHuellaId || 'Ninguna'}</p>
+                                <p><strong>Huella Nueva:</strong> ${newHuellaId}</p>
+                                <p style="color: blue; margin-top: 10px;">
+                                    <i class="fas fa-info-circle"></i> El ID de huella ya está asignado en la base de datos. Ahora necesita registrarlo físicamente en el ESP32.
                                 </p>
                             </div>
-                            <p style="color: green; margin-top: 10px;">
-                                ✅ Preparado para lectura RFID física
-                            </p>
-                        </div>
-                    `,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Sí, leer RFID físico',
-                    cancelButtonText: 'No, solo actualizar en BD',
-                    showDenyButton: true,
-                    denyButtonText: 'Cancelar',
-                    width: 550
-                });
-                
-                if (confirm.isConfirmed) {
-                    // Iniciar proceso de lectura física del RFID
-                    await startPhysicalRFIDUpdate(userId, oldRfidValue, newRfidValue);
-                } else if (confirm.isDenied) {
-                    // Opción de cancelar (no hacer nada)
-                    console.log('Usuario canceló lectura física de RFID');
-                    Toast.fire({
-                        icon: 'info',
-                        title: 'RFID actualizado solo en base de datos'
+                        `,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, registrar físicamente',
+                        cancelButtonText: 'No, solo actualizar ID',
+                        showDenyButton: true,
+                        denyButtonText: 'Cancelar todo',
+                        width: 500
                     });
+                    
+                    if (confirm.isConfirmed) {
+                        await registerExistingUserFingerprint(userId, newHuellaId);
+                    } else if (confirm.isDenied) {
+                        console.log('Usuario canceló registro físico de huella');
+                    }
+                }
+                
+                // Para RFID
+                if (newRfidValue && newRfidValue !== oldRfidValue) {
+                    const confirm = await Swal.fire({
+                        title: 'Actualizar RFID Físicamente',
+                        text: `¿Desea leer el nuevo RFID físicamente desde el ESP32?`,
+                        html: `
+                            <div style="text-align: left; font-size: 14px;">
+                                <p><strong>Usuario ID:</strong> ${userId}</p>
+                                <p><strong>RFID Anterior:</strong> ${oldRfidValue || 'Ninguno'}</p>
+                                <p><strong>RFID Nuevo (en BD):</strong> ${newRfidValue}</p>
+                                <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                                    <p style="margin: 0; color: #856404;">
+                                        <i class="fas fa-exclamation-triangle"></i> 
+                                        <strong>IMPORTANTE:</strong> Necesita leer físicamente el nuevo RFID en el ESP32
+                                    </p>
+                                </div>
+                                <p style="color: green; margin-top: 10px;">
+                                    ✅ Preparado para lectura RFID física
+                                </p>
+                            </div>
+                        `,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, leer RFID físico',
+                        cancelButtonText: 'No, solo actualizar en BD',
+                        showDenyButton: true,
+                        denyButtonText: 'Cancelar',
+                        width: 550
+                    });
+                    
+                    if (confirm.isConfirmed) {
+                        await startPhysicalRFIDUpdate(userId, oldRfidValue, newRfidValue);
+                    } else if (confirm.isDenied) {
+                        Toast.fire({
+                            icon: 'info',
+                            title: 'RFID actualizado solo en base de datos'
+                        });
+                    }
                 }
             }
             
@@ -2704,7 +2776,6 @@ async function updateUser() {
         });
     }
 }
-
 
 async function startPhysicalRFIDUpdate(userId, oldRfid, newRfid) {
     try {
@@ -5751,42 +5822,267 @@ async function deleteSchedule(scheduleId) {
         });
     }
 }
-async function openEditScheduleModal(scheduleId) {
+async function openEditUserModal(userId) {
     try {
-        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
-            headers: getAuthHeaders()
+        const token = localStorage.getItem("jwtToken");
+        
+        // Obtener datos del usuario
+        const res = await fetch(`${BASE_URL}/users/${userId}`, {
+            headers: { 
+                "Authorization": "Bearer " + token,
+                "Content-Type": "application/json"
+            }
         });
+
         if (!res.ok) {
-            throw new Error('Error cargando horario');
+            throw new Error('No se pudo cargar los datos del usuario');
         }
-        const schedule = await res.json();
-        document.getElementById('editScheduleId').value = schedule.id;
-        document.getElementById('editScheduleName').value = schedule.nombre || '';
-        document.getElementById('editScheduleEntrada').value = schedule.hora_entrada || '';
-        document.getElementById('editScheduleSalida').value = schedule.hora_salida || '';
-        document.getElementById('editScheduleTipo').value = schedule.tipo || 'fijo';
-        document.getElementById('editScheduleTolEnt').value = schedule.tolerancia_entrada || 0;
-        document.getElementById('editScheduleTolSal').value = schedule.tolerancia_salida || 0;
-        document.querySelectorAll('.edit-sch-day').forEach(cb => {
-            cb.checked = false;
+
+        const userData = await res.json();
+        
+        // Llenar el formulario con los datos del usuario
+        document.getElementById('editUserId').value = userData.id;
+        document.getElementById('editUsername').value = userData.username;
+        document.getElementById('editNombre').value = userData.nombre;
+        document.getElementById('editApellido').value = userData.apellido;
+        document.getElementById('editGenero').value = userData.genero || '';
+        
+        // Formatear fechas para input type="date"
+        if (userData.fecha_nacimiento) {
+            document.getElementById('editFechaNacimiento').value = userData.fecha_nacimiento.split('T')[0];
+        }
+        
+        if (userData.fecha_contrato) {
+            document.getElementById('editFechaContrato').value = userData.fecha_contrato.split('T')[0];
+        }
+        
+        document.getElementById('editAreaTrabajo').value = userData.area_trabajo || '';
+        
+        // Manejar el rol
+        const roleSelect = document.getElementById('editRole');
+        if (roleSelect) {
+            roleSelect.value = userData.role || 'empleado';
+            
+            // Si el usuario es administrador actual, permitir cambiar a empleado
+            // Verificar si es el único administrador
+            const isOnlyAdmin = userData.role === 'admin';
+            
+            if (isOnlyAdmin) {
+                // Verificar si hay más administradores
+                const allUsersRes = await fetch(`${BASE_URL}/users/all`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                
+                if (allUsersRes.ok) {
+                    const allUsersData = await allUsersRes.json();
+                    const adminCount = allUsersData.users.filter(u => u.role === 'admin' && u.is_active !== false).length;
+                    
+                    if (adminCount <= 1) {
+                        // Es el único administrador activo
+                        roleSelect.disabled = true;
+                        roleSelect.title = "No puede cambiar su rol porque es el único administrador activo";
+                    } else {
+                        // Hay más administradores, puede cambiar a empleado
+                        roleSelect.disabled = false;
+                        roleSelect.title = "";
+                    }
+                }
+            }
+        }
+        
+        // Guardar valores antiguos para comparación
+        const huellaInput = document.getElementById('editHuellaId');
+        const rfidInput = document.getElementById('editRfid');
+        
+        huellaInput.value = userData.huella_id || '';
+        huellaInput.setAttribute('data-old-value', userData.huella_id || '');
+        
+        rfidInput.value = userData.rfid || '';
+        rfidInput.setAttribute('data-old-value', userData.rfid || '');
+        
+        // Mostrar el modal
+        openModal('editUserModal');
+        
+    } catch (error) {
+        console.error('Error cargando datos del usuario:', error);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error al cargar datos del usuario'
+        });
+    }
+}
+// Agregar esta función para verificar el rol del usuario actual
+async function checkCurrentUserRole() {
+    try {
+        const token = localStorage.getItem("jwtToken");
+        if (!token) return;
+        
+        const payload = decodeJWT(token);
+        const currentUserId = payload.sub;
+        
+        // Obtener todos los usuarios
+        const res = await fetch(`${BASE_URL}/users/all`, {
+            headers: { "Authorization": "Bearer " + token }
         });
         
-        if (schedule.dias) {
-            const diasArray = schedule.dias.split(',');
-            diasArray.forEach(dia => {
-                const checkbox = document.querySelector(`.edit-sch-day[value="${dia.trim()}"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-            });
+        if (res.ok) {
+            const data = await res.json();
+            const activeAdmins = data.users.filter(u => 
+                u.role === 'admin' && u.is_active !== false
+            );
+            
+            return {
+                isCurrentUserAdmin: activeAdmins.some(u => u.id == currentUserId),
+                adminCount: activeAdmins.length
+            };
         }
-        openModal('editScheduleModal');
+    } catch (err) {
+        console.error('Error verificando rol:', err);
+    }
+    return null;
+}
+
+// Modificar la sección de "Mis Credenciales" para mostrar advertencia
+async function loadAdminInfo() {
+    try {
+        const token = localStorage.getItem("jwtToken");
+        if (!token) {
+            Toast.fire({
+                icon: 'error',
+                title: 'No hay sesión activa'
+            });
+            return;
+        }
+
+        const payload = decodeJWT(token);
+        const userId = payload.sub || payload.user_id || payload.id;
+        
+        if (!userId) {
+            Toast.fire({
+                icon: 'error',
+                title: 'Error: No se pudo identificar al administrador'
+            });
+            return;
+        }
+
+        // Obtener información del administrador
+        const res = await fetch(`${BASE_URL}/users/${userId}`, {
+            headers: { 
+                "Authorization": "Bearer " + token,
+                "Content-Type": "application/json"
+            }
+        });
+
+        if (!res.ok) {
+            throw new Error(`Error ${res.status}`);
+        }
+
+        const adminData = await res.json();
+        
+        // Verificar si es el único administrador
+        const roleInfo = await checkCurrentUserRole();
+        
+        // Actualizar la UI
+        const adminInfoDiv = document.getElementById('admin-info-container');
+        if (adminInfoDiv) {
+            let warningHtml = '';
+            
+            if (roleInfo && roleInfo.adminCount <= 1) {
+                warningHtml = `
+                    <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #ffc107;">
+                        <p style="margin: 0; color: #856404; font-size: 14px;">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <strong>ADVERTENCIA:</strong> Usted es el único administrador activo del sistema.
+                            No puede cambiar su rol a "empleado" hasta que designe a otro administrador.
+                        </p>
+                    </div>
+                `;
+            }
+            
+            adminInfoDiv.innerHTML = warningHtml + `
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h3 style="margin-top: 0; color: #333;">Información del Administrador</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                        <div>
+                            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Nombre Completo</p>
+                            <p style="margin: 0; font-size: 16px; font-weight: 500;">${adminData.nombre} ${adminData.apellido}</p>
+                        </div>
+                        
+                        <div>
+                            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Username</p>
+                            <p style="margin: 0; font-size: 16px; font-weight: 500;">${adminData.username}</p>
+                        </div>
+                        
+                        <div>
+                            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Rol Actual</p>
+                            <p style="margin: 0; font-size: 16px; font-weight: 500; color: #28a745;">
+                                ${adminData.role === 'admin' ? 'Administrador' : 'Empleado'}
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Estado</p>
+                            <p style="margin: 0; font-size: 16px; font-weight: 500; color: #28a745;">
+                                ${adminData.is_active === false ? 'Suspendido' : 'Activo'}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="border-top: 1px solid #dee2e6; padding-top: 20px;">
+                        <h4 style="margin-bottom: 15px; color: #333;">Credenciales Biométricas</h4>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Huella Digital</p>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span id="admin-huella" style="font-size: 16px; font-weight: 500; ${adminData.huella_id ? 'color: green;' : 'color: red;'}">
+                                        ${adminData.huella_id || "No asignado"}
+                                    </span>
+                                    ${adminData.huella_id ? '<span style="color: green;">✓</span>' : ''}
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">RFID</p>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span id="admin-rfid" style="font-size: 16px; font-weight: 500; ${adminData.rfid ? 'color: green;' : 'color: red;'}">
+                                        ${adminData.rfid || "No asignado"}
+                                    </span>
+                                    ${adminData.rfid ? '<span style="color: green;">✓</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 25px; display: flex; gap: 10px;">
+                        <button onclick="openEditUserModal(${userId})" class="btn primary" style="flex: 1;">
+                            <i class="fas fa-edit"></i> Editar Mi Información
+                        </button>
+                        
+                        <button onclick="registerAdminFingerprint()" 
+                                class="btn ${adminData.huella_id ? 'secondary' : 'success'}" 
+                                ${adminData.huella_id ? 'disabled' : ''}
+                                style="flex: 1;">
+                            ${adminData.huella_id ? '✓ Huella Registrada' : 'Registrar Mi Huella'}
+                        </button>
+                        
+                        <button onclick="registerAdminRFID()" 
+                                class="btn ${adminData.rfid ? 'secondary' : 'warning'}" 
+                                ${adminData.rfid ? 'disabled' : ''}
+                                style="flex: 1;">
+                            ${adminData.rfid ? '✓ RFID Registrado' : 'Registrar Mi RFID'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
         
     } catch (err) {
-        console.error("Error abriendo modal de edición:", err);
-        Toast.fire({ 
-            icon: 'error', 
-            title: 'Error al cargar horario' 
+        console.error("Error cargando info admin:", err);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error al cargar información: ' + err.message
         });
     }
 }
