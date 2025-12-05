@@ -1,5 +1,5 @@
 const BASE_URL = "https://asistencia-iot-api.onrender.com"; // Tu backend en Render
-let ESP32_BASE_URL = 'http://192.168.1.108'; // Tu ESP32 local
+let ESP32_BASE_URL = 'https://f4f12bcf3348.ngrok-free.app'; // Tu ESP32 local
 
 const Toast = Swal.mixin({
     toast: true,
@@ -1516,7 +1516,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function configureESP32IP() {
-    const currentIP = localStorage.getItem('esp32_ip') || '192.168.1.108';
+    const currentIP = localStorage.getItem('esp32_ip') || 'https://f4f12bcf3348.ngrok-free.app';
     const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
 
     if (newIP) {
@@ -1532,7 +1532,7 @@ function configureESP32IP() {
         } else {
             Toast.fire({
                 icon: 'error',
-                title: 'Formato de IP inválido. Ejemplo: 192.168.1.108'
+                title: 'Formato de IP inválido. Ejemplo: https://f4f12bcf3348.ngrok-free.app'
             });
         }
     }
@@ -4479,7 +4479,7 @@ async function sendUniversalCommand(command, huellaId = null, userId = null) {
         throw new Error(
             `No se pudo conectar al ESP32.\n\n` +
             `Verifique que:\n` +
-            `1. El ESP32 esté encendido (192.168.1.108)\n` +
+            `1. El ESP32 esté encendido (https://f4f12bcf3348.ngrok-free.app)\n` +
             `2. Su computadora esté en la misma red WiFi\n` +
             `3. La IP ${esp32IP} sea correcta\n` +
             `4. Pueda acceder a http://${esp32IP} desde el navegador`
@@ -5378,8 +5378,8 @@ function getAuthHeaders() {
 document.addEventListener("DOMContentLoaded", function () {
     // Configurar IP por defecto si no existe
     if (!localStorage.getItem('esp32_ip')) {
-        localStorage.setItem('esp32_ip', '192.168.1.108');
-        ESP32_BASE_URL = 'http://192.168.1.108';
+        localStorage.setItem('esp32_ip', 'https://f4f12bcf3348.ngrok-free.app');
+        ESP32_BASE_URL = 'https://f4f12bcf3348.ngrok-free.app';
     } else {
         ESP32_BASE_URL = `http://${localStorage.getItem('esp32_ip')}`;
     }
