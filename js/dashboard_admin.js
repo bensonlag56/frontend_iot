@@ -2978,9 +2978,7 @@ async function startPhysicalRFIDUpdate(userId, oldRfid, newRfid) {
         });
     }
 }
-// ========== REGISTRAR HUELLA PARA USUARIO EXISTENTE (YA TIENE ID ASIGNADO) ==========
-// ========== FUNCIÓN DE REGISTRO CON MANEJO MEJORADO ==========
-// ========== FUNCIÓN MEJORADA PARA REGISTRAR HUELLA ==========
+
 async function registerExistingUserFingerprint(userId, huellaId) {
     try {
         console.log(`Registrando huella ${huellaId} para usuario existente ${userId}...`);
