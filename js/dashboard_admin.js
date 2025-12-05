@@ -680,17 +680,28 @@ async function registerAdminRFID() {
     }
 }
 async function sendAdminCommandToESP32(command, huellaId = null, userId = null) {
-    const esp32IP = localStorage.getItem('esp32_ip');
-    if (!esp32IP) {
-        throw new Error('IP del ESP32 no configurada');
-    }
-
+    const esp32IP = localStorage.getItem('esp32_ip') || 'f4f12bcf3348.ngrok-free.app';
+    
     console.log(`[ADMIN] Enviando comando ${command} al ESP32 ${esp32IP}...`);
     
-    // PRIMERO intentar conexión directa simple
+    // DETERMINAR SI ES URL HTTPS (ngrok) O IP LOCAL
+    let url;
+    if (esp32IP.includes('https://')) {
+        // Ya es URL completa
+        url = `${esp32IP}/command`;
+    } else if (esp32IP.includes('.ngrok-free.app') || esp32IP.includes('.ngrok.io')) {
+        // Es dominio ngrok sin protocolo
+        url = `https://${esp32IP}/command`;
+    } else {
+        // Es IP local
+        url = `http://${esp32IP}/command`;
+    }
+    
+    console.log(`URL construida: ${url}`);
+    
     try {
-        console.log("[ADMIN] 1. Intentando conexión directa simple...");
-        const response = await fetch(`http://${esp32IP}/command`, {
+        console.log("[ADMIN] 1. Intentando conexión directa...");
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -700,7 +711,7 @@ async function sendAdminCommandToESP32(command, huellaId = null, userId = null) 
                 huella_id: huellaId,
                 user_id: userId,
                 timestamp: Date.now(),
-                is_admin: true  // Agregar bandera para admin
+                is_admin: true
             })
         });
         
@@ -714,31 +725,22 @@ async function sendAdminCommandToESP32(command, huellaId = null, userId = null) 
     } catch (directError) {
         console.log("[ADMIN] ✗ Conexión directa falló:", directError.message);
         
-
+        // Si falla la conexión directa, intentar con proxy
         try {
-            console.log("[ADMIN] 2. Intentando con XMLHttpRequest...");
-            const result = await sendCommandToESP32(command, huellaId, userId);
-            return result;
-        } catch (xhrError) {
-            console.log("[ADMIN] ✗ XMLHttpRequest también falló:", xhrError.message);
+            console.log("[ADMIN] 2. Intentando via proxy...");
+            const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
+            return proxyResult;
+        } catch (proxyError) {
+            console.log("[ADMIN] ✗ Proxy también falló:", proxyError.message);
             
-
-            try {
-                console.log("[ADMIN] 3. Intentando via proxy...");
-                const proxyResult = await sendCommandViaProxy(command, huellaId, userId);
-                return proxyResult;
-            } catch (proxyError) {
-                console.log("[ADMIN] ✗ Proxy también falló:", proxyError.message);
-                
-                throw new Error(
-                    `No se pudo conectar al ESP32.\n\n` +
-                    `Verifique que:\n` +
-                    `1. El ESP32 esté encendido\n` +
-                    `2. Su computadora esté en la misma red WiFi\n` +
-                    `3. La IP ${esp32IP} sea correcta\n` +
-                    `4. Pueda acceder a http://${esp32IP} desde el navegador`
-                );
-            }
+            throw new Error(
+                `No se pudo conectar al ESP32.\n\n` +
+                `Verifique que:\n` +
+                `1. El ESP32 esté encendido\n` +
+                `2. La URL ${esp32IP} sea correcta\n` +
+                `3. Pueda acceder a ${url} desde el navegador\n` +
+                `4. Si usa ngrok, verifique que el túnel esté activo`
+            );
         }
     }
 }
@@ -1516,28 +1518,36 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function configureESP32IP() {
-    const currentIP = localStorage.getItem('esp32_ip') || 'https://f4f12bcf3348.ngrok-free.app';
-    const newIP = prompt(' CONFIGURAR IP DEL ESP32\n\nIngrese la IP del dispositivo:', currentIP);
+    const currentIP = localStorage.getItem('esp32_ip') || 'f4f12bcf3348.ngrok-free.app';
+    const newIP = prompt('CONFIGURAR URL DEL ESP32\n\nIngrese la IP o URL del dispositivo:\n\n• Para ngrok: f4f12bcf3348.ngrok-free.app\n• Para IP local: 192.168.1.108\n\nURL actual:', currentIP);
 
     if (newIP) {
-        if (newIP.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
-            localStorage.setItem('esp32_ip', newIP);
-            ESP32_BASE_URL = `http://${newIP}`;
-            document.getElementById('current-ip').textContent = newIP;
+        // Validar que sea una IP o URL válida
+        const ipRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+        const urlRegex = /^[a-zA-Z0-9.-]+(\.ngrok-free\.app|\.ngrok\.io)$/;
+        
+        if (ipRegex.test(newIP) || urlRegex.test(newIP) || newIP.includes('https://')) {
+            // Si el usuario puso https://, quitarlo para almacenar solo el dominio/IP
+            let cleanIP = newIP.replace(/^https?:\/\//, '');
+            localStorage.setItem('esp32_ip', cleanIP);
+            ESP32_BASE_URL = cleanIP.includes('.') && !ipRegex.test(cleanIP) 
+                ? `https://${cleanIP}`
+                : `http://${cleanIP}`;
+            
+            document.getElementById('current-ip').textContent = cleanIP;
             Toast.fire({
                 icon: 'success',
-                title: 'IP configurada correctamente: ' + newIP
+                title: 'URL configurada correctamente: ' + cleanIP
             });
             updateESP32Status();
         } else {
             Toast.fire({
                 icon: 'error',
-                title: 'Formato de IP inválido. Ejemplo: https://f4f12bcf3348.ngrok-free.app'
+                title: 'Formato inválido. Ejemplos:\n• 192.168.1.108 (IP local)\n• f4f12bcf3348.ngrok-free.app (ngrok)\n• https://f4f12bcf3348.ngrok-free.app'
             });
         }
     }
 }
-
 async function updateESP32Status() {
     const statusElement = document.getElementById('esp32-status');
     const infoElement = document.getElementById('esp32-info');
@@ -1550,6 +1560,11 @@ async function updateESP32Status() {
     try {
         const esp32IP = localStorage.getItem('esp32_ip') || 'f4f12bcf3348.ngrok-free.app';
         
+        // Determinar si es ngrok (HTTPS) o IP local (HTTP)
+        const isNgrok = esp32IP.includes('.ngrok-free.app') || esp32IP.includes('.ngrok.io');
+        const protocol = isNgrok ? 'https://' : 'http://';
+        const fullUrl = `${protocol}${esp32IP}`;
+        
         // Usar el proxy del backend
         const response = await fetch(`${BASE_URL}/esp32/proxy/status`, {
             method: 'POST',
@@ -1558,7 +1573,8 @@ async function updateESP32Status() {
                 'Authorization': 'Bearer ' + localStorage.getItem('jwtToken')
             },
             body: JSON.stringify({
-                esp32_ip: esp32IP
+                esp32_ip: esp32IP,
+                protocol: isNgrok ? 'https' : 'http'
             })
         });
         
@@ -1566,16 +1582,18 @@ async function updateESP32Status() {
             const data = await response.json();
             
             if (data.success && data.status === 'online') {
+                const displayProtocol = isNgrok ? 'HTTPS (ngrok)' : 'HTTP (local)';
                 statusElement.innerHTML =
                     ` ESP32 CONECTADO<br>` +
                     ` URL: ${esp32IP}<br>` +
-                    ` Via: Backend Proxy`;
+                    ` Via: ${displayProtocol}`;
                 statusElement.className = 'status-box status-online';
 
                 if (infoElement) {
                     infoElement.innerHTML = `
-                        <p><strong>Conexión:</strong> Via ngrok + Backend Proxy</p>
+                        <p><strong>Conexión:</strong> Via ${displayProtocol}</p>
                         <p><strong>URL:</strong> ${esp32IP}</p>
+                        <p><strong>Protocolo:</strong> ${isNgrok ? 'HTTPS' : 'HTTP'}</p>
                         <p><strong>Estado:</strong> ✅ Conectado</p>
                         <p><strong>Mensaje:</strong> ${data.message || 'OK'}</p>
                     `;
