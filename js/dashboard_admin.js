@@ -5379,8 +5379,8 @@ async function loadSchedules() {
 }
 async function assignScheduleToUser(scheduleId) {
     try {
-        // Primero cargar usuarios
-        const usersRes = await fetch(`${BASE_URL}/users/`, {
+        // Primero cargar TODOS los usuarios (incluyendo admins)
+        const usersRes = await fetch(`${BASE_URL}/users/all`, {
             headers: getAuthHeaders()
         });
         
@@ -5389,16 +5389,26 @@ async function assignScheduleToUser(scheduleId) {
         }
         
         const usersData = await usersRes.json();
-        const users = usersData.users || [];
+        
+        // Filtrar: mostrar TODOS los usuarios activos, incluyendo admins
+        const activeUsers = usersData.users.filter(u => u.is_active !== false);
         
         // Llenar select de usuarios
         const select = document.getElementById('assignUserSelect');
         select.innerHTML = '<option value="">Seleccionar usuario</option>';
         
-        users.forEach(user => {
+        activeUsers.forEach(user => {
             const option = document.createElement('option');
             option.value = user.id;
-            option.textContent = `${user.nombre} ${user.apellido} (${user.username})`;
+            let roleBadge = '';
+            
+            if (user.role === 'admin') {
+                roleBadge = '<span style="color: #dc3545; font-weight: bold;"> [Admin]</span>';
+            } else if (user.role === 'empleado') {
+                roleBadge = '<span style="color: #28a745;"> [Empleado]</span>';
+            }
+            
+            option.innerHTML = `${user.nombre} ${user.apellido} (${user.username})${roleBadge}`;
             select.appendChild(option);
         });
         
@@ -5410,8 +5420,25 @@ async function assignScheduleToUser(scheduleId) {
         document.getElementById('assignStartDate').value = today;
         document.getElementById('assignEndDate').value = '';
         
-        // Abrir modal
-        openModal('assignScheduleModal');
+        // Mostrar advertencia si es admin
+        Swal.fire({
+            title: 'Asignar Horario',
+            html: `
+                <div style="text-align: left; font-size: 14px;">
+                    <p><strong>Nota importante:</strong></p>
+                    <ul>
+                        <li>Puede asignar horarios tanto a <strong>empleados</strong> como a <strong>administradores</strong></li>
+                        <li>Los administradores también necesitan horarios para registrar asistencias</li>
+                        <li>Los usuarios se muestran con su rol entre corchetes</li>
+                    </ul>
+                </div>
+            `,
+            icon: 'info',
+            confirmButtonText: 'Continuar'
+        }).then(() => {
+            // Abrir modal
+            openModal('assignScheduleModal');
+        });
         
     } catch (err) {
         console.error("Error preparando asignación:", err);
