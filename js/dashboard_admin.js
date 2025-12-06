@@ -224,7 +224,63 @@ function decodeJWT(token) {
         return {};
     }
 }
-
+// ========== FUNCIÓN PARA ABRIR MODAL DE EDICIÓN DE HORARIO ==========
+async function openEditScheduleModal(scheduleId) {
+    try {
+        console.log(`Cargando horario ${scheduleId} para edición...`);
+        
+        // Obtener datos del horario
+        const res = await fetch(`${BASE_URL}/schedules/${scheduleId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!res.ok) {
+            throw new Error(`Error ${res.status} cargando horario`);
+        }
+        
+        const schedule = await res.json();
+        
+        console.log("Datos del horario:", schedule);
+        
+        // Rellenar formulario con los datos del horario
+        document.getElementById('editScheduleId').value = schedule.id;
+        document.getElementById('editScheduleName').value = schedule.nombre || '';
+        document.getElementById('editScheduleEntrada').value = schedule.hora_entrada || '';
+        document.getElementById('editScheduleSalida').value = schedule.hora_salida || '';
+        document.getElementById('editScheduleTipo').value = schedule.tipo || 'fijo';
+        document.getElementById('editScheduleTolEnt').value = schedule.tolerancia_entrada || 0;
+        document.getElementById('editScheduleTolSal').value = schedule.tolerancia_salida || 0;
+        
+        // Limpiar todas las casillas primero
+        document.querySelectorAll('.edit-sch-day').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Marcar los días que corresponden
+        if (schedule.dias) {
+            const diasArray = schedule.dias.split(',');
+            diasArray.forEach(dia => {
+                const diaTrimmed = dia.trim();
+                const checkbox = document.querySelector(`.edit-sch-day[value="${diaTrimmed}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        }
+        
+        // Abrir el modal
+        openModal('editScheduleModal');
+        
+        console.log(`Modal abierto para editar horario ID: ${scheduleId}`);
+        
+    } catch (err) {
+        console.error("Error abriendo modal de edición de horario:", err);
+        Toast.fire({
+            icon: 'error',
+            title: 'Error cargando horario: ' + err.message
+        });
+    }
+}
 // ========== REGISTRO DE HUELLA PARA ADMIN ==========
 async function registerAdminFingerprint() {
     try {
